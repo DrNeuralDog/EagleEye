@@ -170,6 +170,40 @@ func (keeper *TimeKeeper) UpdateConfig(config model.TimeKeeperConfig) {
 	keeper.mu.Unlock()
 }
 
+// SkipBreak ends the current break and returns to work state.
+func (keeper *TimeKeeper) SkipBreak() {
+	keeper.mu.Lock()
+	if keeper.state != StateShortBreak && keeper.state != StateLongBreak {
+		keeper.mu.Unlock()
+		return
+	}
+	keeper.state = StateWork
+	keeper.remaining = 0
+	keeper.resetWorkTimersLocked()
+	keeper.mu.Unlock()
+
+	keeper.emit(Event{
+		Type:  EventStateChange,
+		State: StateWork,
+		At:    time.Now(),
+	})
+}
+
+// ForceBreak triggers an immediate short or long break.
+func (keeper *TimeKeeper) ForceBreak(state State) {
+	if state != StateShortBreak && state != StateLongBreak {
+		return
+	}
+
+	keeper.mu.Lock()
+	if !keeper.running || keeper.paused {
+		keeper.mu.Unlock()
+		return
+	}
+	keeper.enterBreakLocked(state)
+	keeper.mu.Unlock()
+}
+
 // ResetForIdle forces the timer to restart work intervals.
 func (keeper *TimeKeeper) ResetForIdle() {
 	keeper.mu.Lock()
