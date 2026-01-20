@@ -31,6 +31,9 @@ type Window struct {
 // New creates a preferences window.
 func New(app fyne.App, settings Settings, onSave func(Settings)) *Window {
 	window := app.NewWindow("EagleEye Settings")
+	if app.Icon() != nil {
+		window.SetIcon(app.Icon())
+	}
 
 	shortInt := widget.NewEntry()
 	shortDur := widget.NewEntry()
