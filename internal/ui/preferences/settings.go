@@ -29,7 +29,7 @@ func DefaultSettings() Settings {
 		StrictMode:    false,
 		IdleEnabled:   true,
 		OverlayOpacity: 0.85,
-		Fullscreen:     true,
+		Fullscreen:     false,
 	}
 }
 

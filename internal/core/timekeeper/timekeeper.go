@@ -307,8 +307,7 @@ func (keeper *TimeKeeper) advanceBreakLocked(delta time.Duration, now time.Time)
 			State:     keeper.state,
 			Remaining: keeper.remaining,
 			Progress:  keeper.breakProgressLocked(),
-			StrictMode: keeper.state == StateLongBreak &&
-				keeper.config.Long.StrictMode,
+			StrictMode: keeper.config.Long.StrictMode,
 			At: now,
 		})
 		return
@@ -339,7 +338,7 @@ func (keeper *TimeKeeper) enterBreakLocked(state State) {
 		Type:       EventStateChange,
 		State:      state,
 		Remaining:  keeper.remaining,
-		StrictMode: state == StateLongBreak && keeper.config.Long.StrictMode,
+		StrictMode: keeper.config.Long.StrictMode,
 		At:         time.Now(),
 	})
 }
