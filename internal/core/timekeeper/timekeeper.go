@@ -255,7 +255,7 @@ func (keeper *TimeKeeper) handleIdleCheckLocked(now time.Time) {
 	if err != nil {
 		if errors.Is(err, ErrIdleUnsupported) {
 			keeper.config.IdleResetEnabled = false
-			keeper.emit(Event{
+			keeper.emitLocked(Event{
 				Type:    EventIdleError,
 				State:   keeper.state,
 				Message: err.Error(),
@@ -263,7 +263,7 @@ func (keeper *TimeKeeper) handleIdleCheckLocked(now time.Time) {
 			})
 			return
 		}
-		keeper.emit(Event{
+		keeper.emitLocked(Event{
 			Type:    EventIdleError,
 			State:   keeper.state,
 			Message: err.Error(),
@@ -273,7 +273,7 @@ func (keeper *TimeKeeper) handleIdleCheckLocked(now time.Time) {
 	}
 	if idleDuration >= keeper.config.IdleResetAfter {
 		keeper.resetWorkTimersLocked()
-		keeper.emit(Event{
+		keeper.emitLocked(Event{
 			Type:    EventIdleReset,
 			State:   keeper.state,
 			Message: "idle reset",
@@ -302,7 +302,7 @@ func (keeper *TimeKeeper) advanceWorkLocked(delta time.Duration) {
 func (keeper *TimeKeeper) advanceBreakLocked(delta time.Duration, now time.Time) {
 	keeper.remaining -= delta
 	if keeper.remaining > 0 {
-		keeper.emit(Event{
+		keeper.emitLocked(Event{
 			Type:      EventProgress,
 			State:     keeper.state,
 			Remaining: keeper.remaining,
@@ -318,7 +318,7 @@ func (keeper *TimeKeeper) advanceBreakLocked(delta time.Duration, now time.Time)
 	keeper.remaining = 0
 	keeper.resetWorkTimersLocked()
 
-	keeper.emit(Event{
+	keeper.emitLocked(Event{
 		Type:  EventStateChange,
 		State: StateWork,
 		At:    now,
@@ -335,7 +335,7 @@ func (keeper *TimeKeeper) enterBreakLocked(state State) {
 		keeper.nextShort = keeper.config.Short.Interval
 	}
 
-	keeper.emit(Event{
+	keeper.emitLocked(Event{
 		Type:       EventStateChange,
 		State:      state,
 		Remaining:  keeper.remaining,
@@ -372,7 +372,7 @@ func (keeper *TimeKeeper) breakProgressLocked() float64 {
 
 func (keeper *TimeKeeper) maybeEmitProgressLocked(now time.Time) {
 	if keeper.lastProgressSent.IsZero() || now.Sub(keeper.lastProgressSent) >= keeper.options.TickInterval {
-		keeper.emit(Event{
+		keeper.emitLocked(Event{
 			Type:      EventProgress,
 			State:     keeper.state,
 			Remaining: keeper.nextBreakRemainingLocked(),
@@ -405,9 +405,12 @@ func (keeper *TimeKeeper) workProgressLocked() float64 {
 
 func (keeper *TimeKeeper) emit(event Event) {
 	keeper.mu.Lock()
-	events := append([]chan Event(nil), keeper.events...)
-	keeper.mu.Unlock()
+	defer keeper.mu.Unlock()
+	keeper.emitLocked(event)
+}
 
+func (keeper *TimeKeeper) emitLocked(event Event) {
+	events := append([]chan Event(nil), keeper.events...)
 	for _, ch := range events {
 		select {
 		case ch <- event:
