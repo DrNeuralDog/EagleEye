@@ -95,11 +95,6 @@ func (overlay *Window) SetEngine(engine *animation.Engine) {
 
 // Show starts a new overlay session.
 func (overlay *Window) Show(session Session, spec animation.ExerciseSpec) {
-	overlay.setRemaining(session.Remaining)
-	overlay.setStrictMode(session.StrictMode)
-	overlay.window.Show()
-	overlay.window.RequestFocus()
-
 	overlay.stopEngine()
 	ctx, cancel := context.WithCancel(context.Background())
 	overlay.cancelCtx = cancel
@@ -111,6 +106,13 @@ func (overlay *Window) Show(session Session, spec animation.ExerciseSpec) {
 	spec.Duration = session.Remaining
 	spec.Type = session.Exercise
 
+	fyne.Do(func() {
+		overlay.setRemainingUnsafe(session.Remaining)
+		overlay.setStrictModeUnsafe(session.StrictMode)
+		overlay.window.Show()
+		overlay.window.RequestFocus()
+	})
+
 	if overlay.engine != nil {
 		overlay.engine.StartExercise(ctx, spec)
 	}
@@ -118,14 +120,17 @@ func (overlay *Window) Show(session Session, spec animation.ExerciseSpec) {
 
 // ShowIdle starts the idle animation (long breaks).
 func (overlay *Window) ShowIdle(remaining time.Duration, strict bool, idle animation.IdleSpec) {
-	overlay.setRemaining(remaining)
-	overlay.setStrictMode(strict)
-	overlay.window.Show()
-	overlay.window.RequestFocus()
-
 	overlay.stopEngine()
 	ctx, cancel := context.WithCancel(context.Background())
 	overlay.cancelCtx = cancel
+
+	fyne.Do(func() {
+		overlay.setRemainingUnsafe(remaining)
+		overlay.setStrictModeUnsafe(strict)
+		overlay.window.Show()
+		overlay.window.RequestFocus()
+	})
+
 	if overlay.engine != nil {
 		overlay.engine.StartIdle(ctx, idle)
 	}
@@ -134,7 +139,9 @@ func (overlay *Window) ShowIdle(remaining time.Duration, strict bool, idle anima
 // Hide closes the overlay and stops animations.
 func (overlay *Window) Hide() {
 	overlay.stopEngine()
-	overlay.window.Hide()
+	fyne.Do(func() {
+		overlay.window.Hide()
+	})
 }
 
 // SetRemaining updates the timer label.
@@ -150,19 +157,25 @@ func (overlay *Window) SetStrictMode(enabled bool) {
 // SetOnSkip sets skip handler.
 func (overlay *Window) SetOnSkip(handler func()) {
 	overlay.onSkip = handler
-	overlay.skipButton.OnTapped = handler
+	overlay.skipButton.OnTapped = func() {
+		if overlay.onSkip != nil {
+			overlay.onSkip()
+		}
+	}
 }
 
 // UpdateConfig updates overlay visuals.
 func (overlay *Window) UpdateConfig(config Config) {
-	overlay.config = config
-	overlay.background.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: config.Opacity}
-	overlay.message.SetText(config.Message)
-	if config.Fullscreen {
-		overlay.window.SetFullScreen(true)
-	}
-	canvas.Refresh(overlay.background)
-	canvas.Refresh(overlay.message)
+	fyne.Do(func() {
+		overlay.config = config
+		overlay.background.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: config.Opacity}
+		overlay.message.SetText(config.Message)
+		if config.Fullscreen {
+			overlay.window.SetFullScreen(true)
+		}
+		canvas.Refresh(overlay.background)
+		canvas.Refresh(overlay.message)
+	})
 }
 
 // SetSprite updates the center sprite image.
@@ -175,18 +188,26 @@ func (overlay *Window) SetSprite(resource fyne.Resource) {
 
 func (overlay *Window) setRemaining(remaining time.Duration) {
 	fyne.Do(func() {
-		overlay.timerLabel.SetText(formatDuration(remaining))
+		overlay.setRemainingUnsafe(remaining)
 	})
 }
 
 func (overlay *Window) setStrictMode(enabled bool) {
 	fyne.Do(func() {
-		if enabled {
-			overlay.skipButton.Disable()
-		} else {
-			overlay.skipButton.Enable()
-		}
+		overlay.setStrictModeUnsafe(enabled)
 	})
+}
+
+func (overlay *Window) setRemainingUnsafe(remaining time.Duration) {
+	overlay.timerLabel.SetText(formatDuration(remaining))
+}
+
+func (overlay *Window) setStrictModeUnsafe(enabled bool) {
+	if enabled {
+		overlay.skipButton.Disable()
+		return
+	}
+	overlay.skipButton.Enable()
 }
 
 func (overlay *Window) stopEngine() {

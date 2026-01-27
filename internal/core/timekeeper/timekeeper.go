@@ -412,9 +412,30 @@ func (keeper *TimeKeeper) emit(event Event) {
 func (keeper *TimeKeeper) emitLocked(event Event) {
 	events := append([]chan Event(nil), keeper.events...)
 	for _, ch := range events {
+		keeper.enqueueEventLocked(ch, event)
+	}
+}
+
+func (keeper *TimeKeeper) enqueueEventLocked(ch chan Event, event Event) {
+	// Progress events are best-effort; state changes must be delivered.
+	if event.Type == EventProgress {
 		select {
 		case ch <- event:
 		default:
+		}
+		return
+	}
+
+	for {
+		select {
+		case ch <- event:
+			return
+		default:
+			// Drop one queued event (typically stale progress) and retry.
+			select {
+			case <-ch:
+			default:
+			}
 		}
 	}
 }

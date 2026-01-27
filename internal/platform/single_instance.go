@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net"
+	"time"
 )
 
 // ErrAlreadyRunning indicates another instance already holds the lock.
@@ -41,6 +42,46 @@ func (guard *InstanceGuard) Address() string {
 		return ""
 	}
 	return guard.address
+}
+
+// ListenForActivation handles second-instance activation pings.
+func (guard *InstanceGuard) ListenForActivation(onActivate func()) {
+	if guard == nil || guard.listener == nil {
+		return
+	}
+	go func() {
+		for {
+			conn, err := guard.listener.Accept()
+			if err != nil {
+				if errors.Is(err, net.ErrClosed) {
+					return
+				}
+				continue
+			}
+
+			_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+			var signal [1]byte
+			_, _ = conn.Read(signal[:])
+			_ = conn.Close()
+
+			if onActivate != nil {
+				onActivate()
+			}
+		}
+	}()
+}
+
+// NotifyRunningInstance asks the already-running instance to show UI.
+func NotifyRunningInstance(appName string) error {
+	address := fmt.Sprintf("127.0.0.1:%d", portFromName(appName))
+	conn, err := net.DialTimeout("tcp", address, 800*time.Millisecond)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = conn.Write([]byte{1})
+	return err
 }
 
 func portFromName(appName string) int {

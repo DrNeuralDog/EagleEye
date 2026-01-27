@@ -2,6 +2,7 @@ package tray
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -20,6 +21,7 @@ type Callbacks struct {
 
 // Manager handles system tray state.
 type Manager struct {
+	mu          sync.Mutex
 	app         desktop.App
 	statusItem  *fyne.MenuItem
 	pauseItem   *fyne.MenuItem
@@ -100,39 +102,50 @@ func New(app desktop.App, callbacks Callbacks) *Manager {
 
 // SetStatus updates the status label.
 func (manager *Manager) SetStatus(status string) {
-	manager.statusLabel = status
-	manager.refreshStatus()
+	fyne.Do(func() {
+		manager.mu.Lock()
+		defer manager.mu.Unlock()
+		manager.statusLabel = status
+		manager.refreshStatusLocked()
+	})
 }
 
 // SetPaused updates pause state.
 func (manager *Manager) SetPaused(paused bool) {
-	manager.paused = paused
-	if paused {
-		manager.pauseItem.Label = "Resume"
-	} else {
-		manager.pauseItem.Label = "Pause"
-	}
-	manager.refreshStatus()
-	manager.refreshMenu()
+	fyne.Do(func() {
+		manager.mu.Lock()
+		defer manager.mu.Unlock()
+		manager.paused = paused
+		if paused {
+			manager.pauseItem.Label = "Resume"
+		} else {
+			manager.pauseItem.Label = "Pause"
+		}
+		manager.refreshStatusLocked()
+	})
 }
 
 // SetInBreak toggles break-related menu items.
 func (manager *Manager) SetInBreak(inBreak bool) {
-	manager.inBreak = inBreak
-	manager.skipItem.Disabled = !inBreak
-	manager.refreshMenu()
+	fyne.Do(func() {
+		manager.mu.Lock()
+		defer manager.mu.Unlock()
+		manager.inBreak = inBreak
+		manager.skipItem.Disabled = !inBreak
+		manager.refreshMenuLocked()
+	})
 }
 
-func (manager *Manager) refreshStatus() {
+func (manager *Manager) refreshStatusLocked() {
 	status := manager.statusLabel
 	if manager.paused {
 		status = fmt.Sprintf("%s (paused)", status)
 	}
 	manager.statusItem.Label = fmt.Sprintf("Status: %s", status)
-	manager.refreshMenu()
+	manager.refreshMenuLocked()
 }
 
-func (manager *Manager) refreshMenu() {
+func (manager *Manager) refreshMenuLocked() {
 	if manager.app != nil {
 		manager.app.SetSystemTrayMenu(fyne.NewMenu("EagleEye",
 			manager.statusItem,
