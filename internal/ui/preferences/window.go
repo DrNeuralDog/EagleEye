@@ -187,20 +187,35 @@ func (prefs *Window) UpdateSettings(settings Settings) {
 
 // SetServiceNotStarted shows non-running service status.
 func (prefs *Window) SetServiceNotStarted() {
-	prefs.setStatus(color.NRGBA{R: 128, G: 128, B: 128, A: 255}, "Service not started", "Close window to start", "")
-	prefs.timerToggleButton.Disable()
+	prefs.setStatus(color.NRGBA{R: 128, G: 128, B: 128, A: 255}, "Service not started", "Press Start to run", "")
+	prefs.timerToggleButton.Enable()
+	fyne.Do(func() {
+		prefs.timerToggleButton.SetText("Start")
+		prefs.timerToggleButton.Importance = widget.SuccessImportance
+		prefs.timerToggleButton.Refresh()
+	})
 }
 
 // SetServiceRunning shows running status with countdown.
 func (prefs *Window) SetServiceRunning(remaining time.Duration) {
 	prefs.setStatus(color.NRGBA{R: 57, G: 176, B: 99, A: 255}, "Service is running", "Next eye break in", formatDuration(remaining))
 	prefs.timerToggleButton.Enable()
+	fyne.Do(func() {
+		prefs.timerToggleButton.SetText("Pause break timer")
+		prefs.timerToggleButton.Importance = widget.MediumImportance
+		prefs.timerToggleButton.Refresh()
+	})
 }
 
 // SetServicePaused shows paused service status.
 func (prefs *Window) SetServicePaused() {
 	prefs.setStatus(color.NRGBA{R: 232, G: 190, B: 66, A: 255}, "Service is paused", "Press Resume break timer", "")
 	prefs.timerToggleButton.Enable()
+	fyne.Do(func() {
+		prefs.timerToggleButton.SetText("Resume break timer")
+		prefs.timerToggleButton.Importance = widget.MediumImportance
+		prefs.timerToggleButton.Refresh()
+	})
 }
 
 // SetTimerControlState updates the bottom button label.
@@ -239,7 +254,6 @@ func (prefs *Window) handleSave() {
 	if prefs.callbacks.OnSave != nil {
 		prefs.callbacks.OnSave(settings)
 	}
-	prefs.dismiss(true)
 }
 
 func parsePositiveInt(value string) (int, bool) {
@@ -311,7 +325,7 @@ func (layout *topRightOverlayLayout) Layout(objects []fyne.CanvasObject, size fy
 	if x < margin {
 		x = margin
 	}
-	overlay.Move(fyne.NewPos(x, margin))
+	overlay.Move(fyne.NewPos(x, -6))
 	overlay.Resize(resizedOverlay)
 }
 

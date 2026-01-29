@@ -244,10 +244,11 @@ func main() {
 				Message:    "Time to rest your eyes!",
 			})
 		},
-		OnDismiss: func() {
-			startServiceIfNeeded()
-		},
 		OnToggleTimer: func() {
+			if !serviceStarted {
+				startServiceIfNeeded()
+				return
+			}
 			if isPaused {
 				setPauseState(false)
 			} else {
@@ -256,7 +257,6 @@ func main() {
 		},
 	})
 	prefsWindow.SetServiceNotStarted()
-	prefsWindow.SetTimerControlState(false)
 	guard.ListenForActivation(func() {
 		fyne.Do(func() {
 			prefsWindow.Show()

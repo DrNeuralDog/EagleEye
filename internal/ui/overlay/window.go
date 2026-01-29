@@ -36,6 +36,7 @@ type Window struct {
 	image           *canvas.Image
 	timerLabel      *canvas.Text
 	skipButton      *widget.Button
+	rightPanel      *fyne.Container
 	titleLabel      *canvas.Text
 	subtitleLabel   *canvas.Text
 	exerciseLabel   *canvas.Text
@@ -68,7 +69,7 @@ func New(app fyne.App, config Config, engine *animation.Engine) *Window {
 	}
 	window.SetPadded(false)
 
-	background := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: config.Opacity})
+	background := canvas.NewRectangle(overlayBackgroundColor(config.Opacity))
 
 	image := canvas.NewImageFromResource(nil)
 	image.FillMode = canvas.ImageFillContain
@@ -107,6 +108,7 @@ func New(app fyne.App, config Config, engine *animation.Engine) *Window {
 		image:      image,
 		timerLabel: timerLabel,
 		skipButton: skipButton,
+		rightPanel: rightContent,
 		titleLabel:    titleLabel,
 		subtitleLabel: subtitleLabel,
 		exerciseLabel: exerciseLabel,
@@ -116,6 +118,7 @@ func New(app fyne.App, config Config, engine *animation.Engine) *Window {
 
 	overlay.setExerciseUnsafe(animation.ExerciseLeftRight)
 	overlay.applyWindowMode()
+	overlay.applyNativeOpacity(config.Opacity)
 
 	return overlay
 }
@@ -143,6 +146,7 @@ func (overlay *Window) Show(session Session, spec animation.ExerciseSpec) {
 	overlay.setStrictModeUnsafe(session.StrictMode)
 	overlay.applyWindowMode()
 	overlay.window.Show()
+	overlay.applyNativeOpacity(overlay.config.Opacity)
 	overlay.window.RequestFocus()
 
 	if overlay.engine != nil {
@@ -161,6 +165,7 @@ func (overlay *Window) ShowIdle(remaining time.Duration, strict bool, idle anima
 	overlay.setStrictModeUnsafe(strict)
 	overlay.applyWindowMode()
 	overlay.window.Show()
+	overlay.applyNativeOpacity(overlay.config.Opacity)
 	overlay.window.RequestFocus()
 
 	if overlay.engine != nil {
@@ -207,7 +212,8 @@ func (overlay *Window) SetOnSkip(handler func()) {
 // UpdateConfig updates overlay visuals.
 func (overlay *Window) UpdateConfig(config Config) {
 	overlay.config = config
-	overlay.background.FillColor = color.NRGBA{R: 0, G: 0, B: 0, A: config.Opacity}
+	overlay.background.FillColor = overlayBackgroundColor(config.Opacity)
+	overlay.applyNativeOpacity(config.Opacity)
 	overlay.applyWindowMode()
 	canvas.Refresh(overlay.background)
 	overlay.titleLabel.Refresh()
@@ -238,10 +244,18 @@ func (overlay *Window) setRemainingUnsafe(remaining time.Duration) {
 
 func (overlay *Window) setStrictModeUnsafe(enabled bool) {
 	if enabled {
+		overlay.skipButton.Hide()
 		overlay.skipButton.Disable()
+		if overlay.rightPanel != nil {
+			overlay.rightPanel.Refresh()
+		}
 		return
 	}
+	overlay.skipButton.Show()
 	overlay.skipButton.Enable()
+	if overlay.rightPanel != nil {
+		overlay.rightPanel.Refresh()
+	}
 }
 
 func (overlay *Window) setExerciseUnsafe(exercise animation.ExerciseType) {
@@ -297,6 +311,10 @@ func formatDuration(value time.Duration) string {
 	return fmt.Sprintf("%02d:%02d", minutes, seconds)
 }
 
+func overlayBackgroundColor(alpha uint8) color.NRGBA {
+	return color.NRGBA{R: 0, G: 0, B: 0, A: alpha}
+}
+
 func exerciseDescription(exercise animation.ExerciseType) string {
 	switch exercise {
 	case animation.ExerciseLeftRight:
@@ -322,6 +340,24 @@ func (layout *rightPanelLayout) Layout(objects []fyne.CanvasObject, size fyne.Si
 	skip := objects[1]
 
 	skipSize := skip.MinSize()
+	if !skip.Visible() {
+		side := size.Height
+		if side > size.Width {
+			side = size.Width
+		}
+		x := size.Width - side
+		if x < 0 {
+			x = 0
+		}
+		y := (size.Height - side) / 2
+		if y < 0 {
+			y = 0
+		}
+		image.Move(fyne.NewPos(x, y))
+		image.Resize(fyne.NewSize(side, side))
+		return
+	}
+
 	skipHeight := skipSize.Height
 	if skipHeight > size.Height*0.25 {
 		skipHeight = size.Height * 0.25
@@ -370,6 +406,9 @@ func (layout *rightPanelLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 	}
 	imageMin := objects[0].MinSize()
 	skipMin := objects[1].MinSize()
+	if !objects[1].Visible() {
+		return imageMin
+	}
 	width := imageMin.Width
 	if skipMin.Width > width {
 		width = skipMin.Width
