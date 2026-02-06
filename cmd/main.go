@@ -40,6 +40,9 @@ func main() {
 	}
 
 	trayWindow := fyneApp.NewWindow("EagleEye")
+	if fyneApp.Icon() != nil {
+		trayWindow.SetIcon(fyneApp.Icon())
+	}
 	trayWindow.SetContent(widget.NewLabel("EagleEye is running in the system tray."))
 	trayWindow.SetCloseIntercept(func() {
 		trayWindow.Hide()

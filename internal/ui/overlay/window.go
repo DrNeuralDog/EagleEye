@@ -47,6 +47,9 @@ type Window struct {
 // New creates a new overlay window.
 func New(app fyne.App, config Config, engine *animation.Engine) *Window {
 	window := app.NewWindow("EagleEye")
+	if app.Icon() != nil {
+		window.SetIcon(app.Icon())
+	}
 	window.SetPadded(false)
 
 	background := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: config.Opacity})
