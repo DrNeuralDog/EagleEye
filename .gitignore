@@ -351,6 +351,7 @@ build/
 .cursor/**
 styles/
 
+
 docs/
 docs/*
 docs/**
@@ -362,3 +363,4 @@ docs/DesignPreview/*.txt
 docs/Examples/*.txt
 docs/WorkflowLogs/*.txt
 
+AGENTS.md

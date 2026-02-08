@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"eagleeye/internal/ui/animation"
+	"eagleeye/internal/ui/i18n"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -44,6 +45,8 @@ type Window struct {
 	engine          *animation.Engine
 	cancelCtx       context.CancelFunc
 	onSkip          func()
+	localizer       *i18n.Localizer
+	currentExercise animation.ExerciseType
 }
 
 const (
@@ -58,7 +61,10 @@ type splashWindowDriver interface {
 }
 
 // New creates a new overlay window.
-func New(app fyne.App, config Config, engine *animation.Engine) *Window {
+func New(app fyne.App, config Config, engine *animation.Engine, localizer *i18n.Localizer) *Window {
+	if localizer == nil {
+		localizer = i18n.New(i18n.LanguageEN)
+	}
 	window := app.NewWindow("EagleEye")
 	if driver, ok := app.Driver().(splashWindowDriver); ok {
 		// Splash window is undecorated (no native frame/buttons).
@@ -79,12 +85,12 @@ func New(app fyne.App, config Config, engine *animation.Engine) *Window {
 	timerLabel.TextStyle = fyne.TextStyle{Bold: true}
 	timerLabel.TextSize = 16
 
-	titleLabel := canvas.NewText("Eagle Eye", color.NRGBA{R: 255, G: 255, B: 255, A: 255})
+	titleLabel := canvas.NewText(localizer.T("overlay.title"), color.NRGBA{R: 255, G: 255, B: 255, A: 255})
 	titleLabel.Alignment = fyne.TextAlignLeading
 	titleLabel.TextStyle = fyne.TextStyle{Bold: true}
 	titleLabel.TextSize = 21
 
-	subtitleLabel := canvas.NewText("Пора отдыхать", color.NRGBA{R: 255, G: 255, B: 255, A: 255})
+	subtitleLabel := canvas.NewText(config.Message, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
 	subtitleLabel.Alignment = fyne.TextAlignLeading
 	subtitleLabel.TextStyle = fyne.TextStyle{Bold: true}
 	subtitleLabel.TextSize = 14
@@ -93,7 +99,7 @@ func New(app fyne.App, config Config, engine *animation.Engine) *Window {
 	exerciseLabel.Alignment = fyne.TextAlignLeading
 	exerciseLabel.TextSize = 17
 
-	skipButton := widget.NewButton("Skip", nil)
+	skipButton := widget.NewButton(localizer.T("overlay.skip"), nil)
 
 	leftContent := container.New(&leftPanelLayout{}, titleLabel, subtitleLabel, exerciseLabel, timerLabel)
 	rightContent := container.New(&rightPanelLayout{}, image, skipButton)
@@ -102,18 +108,20 @@ func New(app fyne.App, config Config, engine *animation.Engine) *Window {
 
 	window.SetContent(root)
 	overlay := &Window{
-		app:        app,
-		window:     window,
-		config:     config,
-		image:      image,
-		timerLabel: timerLabel,
-		skipButton: skipButton,
-		rightPanel: rightContent,
-		titleLabel:    titleLabel,
-		subtitleLabel: subtitleLabel,
-		exerciseLabel: exerciseLabel,
-		background: background,
-		engine:     engine,
+		app:             app,
+		window:          window,
+		config:          config,
+		image:           image,
+		timerLabel:      timerLabel,
+		skipButton:      skipButton,
+		rightPanel:      rightContent,
+		titleLabel:      titleLabel,
+		subtitleLabel:   subtitleLabel,
+		exerciseLabel:   exerciseLabel,
+		background:      background,
+		engine:          engine,
+		localizer:       localizer,
+		currentExercise: animation.ExerciseLeftRight,
 	}
 
 	overlay.setExerciseUnsafe(animation.ExerciseLeftRight)
@@ -212,6 +220,7 @@ func (overlay *Window) SetOnSkip(handler func()) {
 // UpdateConfig updates overlay visuals.
 func (overlay *Window) UpdateConfig(config Config) {
 	overlay.config = config
+	overlay.subtitleLabel.Text = config.Message
 	overlay.background.FillColor = overlayBackgroundColor(config.Opacity)
 	overlay.applyNativeOpacity(config.Opacity)
 	overlay.applyWindowMode()
@@ -219,6 +228,19 @@ func (overlay *Window) UpdateConfig(config Config) {
 	overlay.titleLabel.Refresh()
 	overlay.subtitleLabel.Refresh()
 	overlay.exerciseLabel.Refresh()
+}
+
+// RefreshLocalization refreshes language-dependent overlay texts.
+func (overlay *Window) RefreshLocalization() {
+	fyne.Do(func() {
+		overlay.titleLabel.Text = overlay.localizer.T("overlay.title")
+		overlay.subtitleLabel.Text = overlay.config.Message
+		overlay.skipButton.SetText(overlay.localizer.T("overlay.skip"))
+		overlay.setExerciseUnsafe(overlay.currentExercise)
+		overlay.titleLabel.Refresh()
+		overlay.subtitleLabel.Refresh()
+		overlay.exerciseLabel.Refresh()
+	})
 }
 
 // SetSprite updates the center sprite image.
@@ -259,7 +281,8 @@ func (overlay *Window) setStrictModeUnsafe(enabled bool) {
 }
 
 func (overlay *Window) setExerciseUnsafe(exercise animation.ExerciseType) {
-	overlay.exerciseLabel.Text = exerciseDescription(exercise)
+	overlay.currentExercise = exercise
+	overlay.exerciseLabel.Text = exerciseDescription(exercise, overlay.localizer)
 	overlay.exerciseLabel.Refresh()
 }
 
@@ -315,16 +338,16 @@ func overlayBackgroundColor(alpha uint8) color.NRGBA {
 	return color.NRGBA{R: 0, G: 0, B: 0, A: alpha}
 }
 
-func exerciseDescription(exercise animation.ExerciseType) string {
+func exerciseDescription(exercise animation.ExerciseType, localizer *i18n.Localizer) string {
 	switch exercise {
 	case animation.ExerciseLeftRight:
-		return "Двигайте глазами влево и вправо"
+		return localizer.T("overlay.exercise.leftRight")
 	case animation.ExerciseUpDown:
-		return "Двигайте глазами вверх и вниз"
+		return localizer.T("overlay.exercise.upDown")
 	case animation.ExerciseBlink:
-		return "Зажмурьтесь и откройте глаза вновь"
+		return localizer.T("overlay.exercise.blink")
 	case animation.ExerciseLookOutside:
-		return "Посмотрите вдаль и расслабьте глаза"
+		return localizer.T("overlay.exercise.lookOut")
 	default:
 		return ""
 	}

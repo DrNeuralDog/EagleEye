@@ -14,6 +14,7 @@ import (
 	"eagleeye/internal/platform"
 	"eagleeye/internal/storage"
 	"eagleeye/internal/ui/animation"
+	"eagleeye/internal/ui/i18n"
 	"eagleeye/internal/ui/overlay"
 	"eagleeye/internal/ui/preferences"
 	"eagleeye/internal/ui/tray"
@@ -111,7 +112,8 @@ func main() {
 	if fyneApp.Icon() != nil {
 		trayWindow.SetIcon(fyneApp.Icon())
 	}
-	trayWindow.SetContent(widget.NewLabel("EagleEye is running in the system tray."))
+	trayWindowLabel := widget.NewLabel("")
+	trayWindow.SetContent(trayWindowLabel)
 	trayWindow.SetCloseIntercept(func() {
 		trayWindow.Hide()
 	})
@@ -123,14 +125,17 @@ func main() {
 		log.Printf("load settings: %v", err)
 		settings = preferences.DefaultSettings()
 	}
+	localizer := i18n.New(settings.Language)
+	settings.Language = localizer.Language()
+	trayWindowLabel.SetText(localizer.T("main.trayWindowMessage"))
 	keeper := timekeeper.New(settings.TimeKeeperConfig(), timekeeper.Config{TickInterval: time.Second})
 	keeper.SetIdleChecker(platform.NewIdleProvider())
 
 	overlayWindow := overlay.New(fyneApp, overlay.Config{
 		Opacity:    opacityToAlpha(settings.OverlayOpacity),
 		Fullscreen: settings.Fullscreen,
-		Message:    "Time to rest your eyes!",
-	}, nil)
+		Message:    localizer.T("overlay.subtitle"),
+	}, nil, localizer)
 
 	animationEngine := animation.New(animation.DefaultConfig(), func(resource fyne.Resource) {
 		overlayWindow.SetSprite(resource)
@@ -233,15 +238,26 @@ func main() {
 
 	prefsWindow = preferences.New(fyneApp, settings, preferences.Callbacks{
 		OnSave: func(updated preferences.Settings) {
+			languageChanged := i18n.NormalizeLanguage(settings.Language) != i18n.NormalizeLanguage(updated.Language)
 			settings = updated
+			settings.Language = i18n.NormalizeLanguage(settings.Language)
 			if err := storage.SaveSettings(appName, settings); err != nil {
 				log.Printf("save settings: %v", err)
 			}
 			keeper.UpdateConfig(settings.TimeKeeperConfig())
+			if languageChanged {
+				localizer.SetLanguage(settings.Language)
+				trayWindowLabel.SetText(localizer.T("main.trayWindowMessage"))
+				if trayManager != nil {
+					trayManager.RefreshLocalization()
+				}
+				overlayWindow.RefreshLocalization()
+				prefsWindow.RefreshLocalization()
+			}
 			overlayWindow.UpdateConfig(overlay.Config{
 				Opacity:    opacityToAlpha(settings.OverlayOpacity),
 				Fullscreen: settings.Fullscreen,
-				Message:    "Time to rest your eyes!",
+				Message:    localizer.T("overlay.subtitle"),
 			})
 		},
 		OnToggleTimer: func() {
@@ -255,7 +271,7 @@ func main() {
 				setPauseState(true)
 			}
 		},
-	})
+	}, localizer)
 	prefsWindow.SetServiceNotStarted()
 	guard.ListenForActivation(func() {
 		fyne.Do(func() {
@@ -301,7 +317,7 @@ func main() {
 			keeper.Stop()
 			fyneApp.Quit()
 		},
-	})
+	}, localizer)
 
 	desktopApp.SetSystemTrayIcon(activeIcon)
 
@@ -343,7 +359,7 @@ func main() {
 					prefsWindow.SetTimerControlState(true)
 				}
 			case timekeeper.EventProgress:
-				handleProgress(event, overlayWindow, trayManager, jsonLog)
+				handleProgress(event, overlayWindow, trayManager, jsonLog, localizer)
 				if event.State == timekeeper.StateWork {
 					nextBreakRemaining = event.Remaining
 					if serviceStarted && !isPaused {
@@ -425,7 +441,7 @@ func handleStateChange(event timekeeper.Event, overlayWindow *overlay.Window, ex
 	}
 }
 
-func handleProgress(event timekeeper.Event, overlayWindow *overlay.Window, trayManager *tray.Manager, logger *jsonLogger) {
+func handleProgress(event timekeeper.Event, overlayWindow *overlay.Window, trayManager *tray.Manager, logger *jsonLogger, localizer *i18n.Localizer) {
 	if event.State == timekeeper.StateShortBreak || event.State == timekeeper.StateLongBreak {
 		if event.Remaining <= 0 && logger != nil {
 			logger.Log("overlay_hide_called", map[string]any{
@@ -446,7 +462,7 @@ func handleProgress(event timekeeper.Event, overlayWindow *overlay.Window, trayM
 		})
 	}
 	if event.State == timekeeper.StateWork {
-		trayManager.SetStatus("next break in " + formatRemaining(event.Remaining))
+		trayManager.SetStatus(localizer.T("tray.nextBreakIn", formatRemaining(event.Remaining)))
 	}
 }
 
