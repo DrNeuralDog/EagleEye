@@ -7,6 +7,7 @@ import (
 
 	"eagleeye/internal/core/timekeeper"
 	"eagleeye/internal/platform"
+	"eagleeye/internal/storage"
 	"eagleeye/internal/ui/animation"
 	"eagleeye/internal/ui/overlay"
 	"eagleeye/internal/ui/preferences"
@@ -50,7 +51,11 @@ func main() {
 	trayWindow.Hide()
 	desktopApp.SetSystemTrayWindow(trayWindow)
 
-	settings := preferences.DefaultSettings()
+	settings, err := storage.LoadSettings(appName)
+	if err != nil {
+		log.Printf("load settings: %v", err)
+		settings = preferences.DefaultSettings()
+	}
 	keeper := timekeeper.New(settings.TimeKeeperConfig(), timekeeper.Config{TickInterval: time.Second})
 	keeper.SetIdleChecker(platform.NewIdleProvider())
 
@@ -87,6 +92,8 @@ func main() {
 	}
 
 	isPaused := false
+	serviceStarted := false
+	nextBreakRemaining := settings.ShortInterval
 	var pauseTimer *time.Timer
 	exerciseIndex := 0
 	exerciseCycle := []animation.ExerciseType{
@@ -96,58 +103,115 @@ func main() {
 		animation.ExerciseLookOutside,
 	}
 
-	started := false
-	prefsWindow := preferences.New(fyneApp, settings, func(updated preferences.Settings) {
-		settings = updated
-		keeper.UpdateConfig(settings.TimeKeeperConfig())
-		overlayWindow.UpdateConfig(overlay.Config{
-			Opacity:    opacityToAlpha(settings.OverlayOpacity),
-			Fullscreen: settings.Fullscreen,
-			Message:    "Time to rest your eyes!",
-		})
-		if !started {
-			keeper.Start()
-			started = true
-		}
-	})
-
 	activeIcon := resources.MustLogo("Logo_Bright_Gradient.png")
 	pausedIcon := resources.MustLogo("Logo_Dull_Gradient.png")
 
 	var trayManager *tray.Manager
+	var prefsWindow *preferences.Window
+
+	startServiceIfNeeded := func() {
+		if serviceStarted {
+			return
+		}
+		keeper.Start()
+		serviceStarted = true
+		isPaused = false
+		desktopApp.SetSystemTrayIcon(activeIcon)
+		if trayManager != nil {
+			trayManager.SetPaused(false)
+		}
+		if prefsWindow != nil {
+			prefsWindow.SetTimerControlState(true)
+			prefsWindow.SetServiceRunning(nextBreakRemaining)
+		}
+	}
+
+	setPauseState := func(paused bool) {
+		if !serviceStarted {
+			return
+		}
+
+		if paused {
+			keeper.Pause()
+			isPaused = true
+			desktopApp.SetSystemTrayIcon(pausedIcon)
+			if trayManager != nil {
+				trayManager.SetPaused(true)
+			}
+			if prefsWindow != nil {
+				prefsWindow.SetTimerControlState(false)
+				prefsWindow.SetServicePaused()
+			}
+			return
+		}
+
+		keeper.Resume()
+		isPaused = false
+		desktopApp.SetSystemTrayIcon(activeIcon)
+		if trayManager != nil {
+			trayManager.SetPaused(false)
+		}
+		if prefsWindow != nil {
+			prefsWindow.SetTimerControlState(true)
+			prefsWindow.SetServiceRunning(nextBreakRemaining)
+		}
+	}
+
+	prefsWindow = preferences.New(fyneApp, settings, preferences.Callbacks{
+		OnSave: func(updated preferences.Settings) {
+			settings = updated
+			if err := storage.SaveSettings(appName, settings); err != nil {
+				log.Printf("save settings: %v", err)
+			}
+			keeper.UpdateConfig(settings.TimeKeeperConfig())
+			overlayWindow.UpdateConfig(overlay.Config{
+				Opacity:    opacityToAlpha(settings.OverlayOpacity),
+				Fullscreen: settings.Fullscreen,
+				Message:    "Time to rest your eyes!",
+			})
+		},
+		OnDismiss: func() {
+			startServiceIfNeeded()
+		},
+		OnToggleTimer: func() {
+			if isPaused {
+				setPauseState(false)
+			} else {
+				setPauseState(true)
+			}
+		},
+	})
+	prefsWindow.SetServiceNotStarted()
+	prefsWindow.SetTimerControlState(false)
+
 	trayManager = tray.New(desktopApp, tray.Callbacks{
 		OnPreferences: func() {
 			prefsWindow.Show()
 		},
 		OnTogglePause: func() {
-			if isPaused {
-				keeper.Resume()
-				isPaused = false
-				desktopApp.SetSystemTrayIcon(activeIcon)
-			} else {
-				keeper.Pause()
-				isPaused = true
-				desktopApp.SetSystemTrayIcon(pausedIcon)
+			if !serviceStarted {
+				return
 			}
-			trayManager.SetPaused(isPaused)
+			if isPaused {
+				setPauseState(false)
+			} else {
+				setPauseState(true)
+			}
 		},
 		OnSkipBreak: func() {
 			keeper.SkipBreak()
 		},
 		OnPauseFor: func(duration time.Duration) {
+			if !serviceStarted {
+				return
+			}
 			if pauseTimer != nil {
 				pauseTimer.Stop()
 			}
-			keeper.Pause()
-			isPaused = true
-			desktopApp.SetSystemTrayIcon(pausedIcon)
-			trayManager.SetPaused(true)
+			setPauseState(true)
 			pauseTimer = time.AfterFunc(duration, func() {
-				keeper.Resume()
-				isPaused = false
 				fyne.Do(func() {
-					desktopApp.SetSystemTrayIcon(activeIcon)
-					trayManager.SetPaused(false)
+					setPauseState(false)
 				})
 			})
 		},
@@ -168,8 +232,25 @@ func main() {
 			switch event.Type {
 			case timekeeper.EventStateChange:
 				handleStateChange(event, overlayWindow, &exerciseIndex, exerciseCycle, exerciseSpec, idleSpec, trayManager)
+				if event.State == timekeeper.StatePaused {
+					nextBreakRemaining = event.Remaining
+					isPaused = true
+					prefsWindow.SetServicePaused()
+					prefsWindow.SetTimerControlState(false)
+				}
+				if event.State == timekeeper.StateWork && serviceStarted && !isPaused {
+					prefsWindow.SetServiceRunning(nextBreakRemaining)
+					prefsWindow.SetTimerControlState(true)
+				}
 			case timekeeper.EventProgress:
 				handleProgress(event, overlayWindow, trayManager)
+				if event.State == timekeeper.StateWork {
+					nextBreakRemaining = event.Remaining
+					if serviceStarted && !isPaused {
+						prefsWindow.SetServiceRunning(event.Remaining)
+						prefsWindow.SetTimerControlState(true)
+					}
+				}
 			}
 		}
 	}()
