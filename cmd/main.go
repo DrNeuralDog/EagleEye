@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -25,6 +26,11 @@ const appName = "EagleEye"
 func main() {
 	guard, err := platform.AcquireSingleInstance(appName)
 	if err != nil {
+		if errors.Is(err, platform.ErrAlreadyRunning) {
+			if notifyErr := platform.NotifyRunningInstance(appName); notifyErr != nil {
+				log.Printf("notify running instance: %v", notifyErr)
+			}
+		}
 		log.Printf("single instance: %v", err)
 		return
 	}
@@ -71,6 +77,7 @@ func main() {
 	overlayWindow.SetEngine(animationEngine)
 
 	overlayWindow.SetOnSkip(func() {
+		overlayWindow.Hide()
 		keeper.SkipBreak()
 	})
 
@@ -183,6 +190,11 @@ func main() {
 	})
 	prefsWindow.SetServiceNotStarted()
 	prefsWindow.SetTimerControlState(false)
+	guard.ListenForActivation(func() {
+		fyne.Do(func() {
+			prefsWindow.Show()
+		})
+	})
 
 	trayManager = tray.New(desktopApp, tray.Callbacks{
 		OnPreferences: func() {
@@ -284,6 +296,10 @@ func handleStateChange(event timekeeper.Event, overlayWindow *overlay.Window, ex
 func handleProgress(event timekeeper.Event, overlayWindow *overlay.Window, trayManager *tray.Manager) {
 	if event.State == timekeeper.StateShortBreak || event.State == timekeeper.StateLongBreak {
 		overlayWindow.SetRemaining(event.Remaining)
+		if event.Remaining <= 0 {
+			trayManager.SetInBreak(false)
+			overlayWindow.Hide()
+		}
 	}
 	if event.State == timekeeper.StateWork {
 		trayManager.SetStatus("next break in " + formatRemaining(event.Remaining))

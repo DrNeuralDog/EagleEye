@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -36,7 +37,9 @@ type Window struct {
 	opacity           *widget.Slider
 	fullscreen        *widget.Check
 	statusIndicator   *canvas.Text
-	statusDescription *widget.Label
+	statusLine1       *canvas.Text
+	statusLine2       *canvas.Text
+	statusTimer       *widget.Label
 	timerToggleButton *widget.Button
 }
 
@@ -71,13 +74,21 @@ func New(app fyne.App, settings Settings, callbacks Callbacks) *Window {
 	fullscreen.SetChecked(settings.Fullscreen)
 
 	statusIndicator := canvas.NewText("●", color.NRGBA{R: 128, G: 128, B: 128, A: 255})
-	statusIndicator.TextSize = 16
-	statusDescription := widget.NewLabel("Service is not started yet.\nClose this window to start.")
-	statusDescription.Alignment = fyne.TextAlignTrailing
-	statusBox := container.NewVBox(
-		container.NewHBox(layout.NewSpacer(), statusIndicator),
-		statusDescription,
-	)
+	statusIndicator.TextSize = 46
+	statusLine1 := canvas.NewText("Service not started", color.NRGBA{R: 200, G: 200, B: 200, A: 255})
+	statusLine1.TextSize = 9
+	statusLine1.Alignment = fyne.TextAlignCenter
+	statusLine2 := canvas.NewText("Close window to start", color.NRGBA{R: 200, G: 200, B: 200, A: 255})
+	statusLine2.TextSize = 9
+	statusLine2.Alignment = fyne.TextAlignCenter
+	statusTimer := widget.NewLabel("")
+	statusTimer.Alignment = fyne.TextAlignCenter
+	statusBox := container.New(&statusStackLayout{}, statusIndicator, statusLine1, statusLine2, statusTimer)
+
+	heading := canvas.NewText("General", theme.ForegroundColor())
+	heading.TextSize = 18
+	heading.TextStyle = fyne.TextStyle{Bold: true}
+	heading.Alignment = fyne.TextAlignCenter
 
 	labels := map[string]*widget.Label{
 		"shortInterval": widget.NewLabel("min"),
@@ -85,14 +96,15 @@ func New(app fyne.App, settings Settings, callbacks Callbacks) *Window {
 		"longInterval":  widget.NewLabel("min"),
 		"longDuration":  widget.NewLabel("min"),
 	}
+	const valueEntryWidth = float32(60)
+	const scheduleLabelWidth = float32(150)
 
 	form := container.NewVBox(
-		container.NewHBox(layout.NewSpacer(), statusBox),
-		widget.NewLabelWithStyle("General", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		container.NewHBox(widget.NewLabel("Short break every"), shortInt, labels["shortInterval"]),
-		container.NewHBox(widget.NewLabel("Short break duration"), shortDur, labels["shortDuration"]),
-		container.NewHBox(widget.NewLabel("Long break every"), longInt, labels["longInterval"]),
-		container.NewHBox(widget.NewLabel("Long break duration"), longDur, labels["longDuration"]),
+		container.NewCenter(heading),
+		makeScheduleRow("Short break every", scheduleLabelWidth, shortInt, valueEntryWidth, labels["shortInterval"]),
+		makeScheduleRow("Short break duration", scheduleLabelWidth, shortDur, valueEntryWidth, labels["shortDuration"]),
+		makeScheduleRow("Long break every", scheduleLabelWidth, longInt, valueEntryWidth, labels["longInterval"]),
+		makeScheduleRow("Long break duration", scheduleLabelWidth, longDur, valueEntryWidth, labels["longDuration"]),
 		strict,
 		idleCheck,
 		widget.NewLabel("Overlay opacity"),
@@ -102,12 +114,15 @@ func New(app fyne.App, settings Settings, callbacks Callbacks) *Window {
 
 	saveButton := widget.NewButton("Save", nil)
 	cancelButton := widget.NewButton("Cancel", nil)
+	saveWrap := container.NewGridWrap(fyne.NewSize(130, 40), saveButton)
+	cancelWrap := container.NewGridWrap(fyne.NewSize(130, 40), cancelButton)
 	timerToggleButton := widget.NewButton("Pause break timer", nil)
 	timerToggleButton.Disable()
-	buttons := container.NewHBox(saveButton, layout.NewSpacer(), cancelButton)
+	buttons := container.NewHBox(saveWrap, layout.NewSpacer(), cancelWrap)
 	footer := container.NewVBox(buttons, timerToggleButton)
 
-	content := container.NewBorder(nil, footer, nil, nil, form)
+	formWithOverlay := container.New(&topRightOverlayLayout{}, form, statusBox)
+	content := container.NewBorder(nil, footer, nil, nil, formWithOverlay)
 	window.SetContent(content)
 	window.Resize(fyne.NewSize(520, 500))
 
@@ -125,7 +140,9 @@ func New(app fyne.App, settings Settings, callbacks Callbacks) *Window {
 		opacity:           opacity,
 		fullscreen:        fullscreen,
 		statusIndicator:   statusIndicator,
-		statusDescription: statusDescription,
+		statusLine1:       statusLine1,
+		statusLine2:       statusLine2,
+		statusTimer:       statusTimer,
 		timerToggleButton: timerToggleButton,
 	}
 
@@ -169,19 +186,19 @@ func (prefs *Window) UpdateSettings(settings Settings) {
 
 // SetServiceNotStarted shows non-running service status.
 func (prefs *Window) SetServiceNotStarted() {
-	prefs.setStatus(color.NRGBA{R: 128, G: 128, B: 128, A: 255}, "Service is not started yet.\nClose this window to start.")
+	prefs.setStatus(color.NRGBA{R: 128, G: 128, B: 128, A: 255}, "Service not started", "Close window to start", "")
 	prefs.timerToggleButton.Disable()
 }
 
 // SetServiceRunning shows running status with countdown.
 func (prefs *Window) SetServiceRunning(remaining time.Duration) {
-	prefs.setStatus(color.NRGBA{R: 57, G: 176, B: 99, A: 255}, fmt.Sprintf("Service is running.\nNext eye break in %s", formatDuration(remaining)))
+	prefs.setStatus(color.NRGBA{R: 57, G: 176, B: 99, A: 255}, "Service is running", "Next eye break in", formatDuration(remaining))
 	prefs.timerToggleButton.Enable()
 }
 
 // SetServicePaused shows paused service status.
 func (prefs *Window) SetServicePaused() {
-	prefs.setStatus(color.NRGBA{R: 128, G: 128, B: 128, A: 255}, "Service is paused.\nPress Resume break timer.")
+	prefs.setStatus(color.NRGBA{R: 232, G: 190, B: 66, A: 255}, "Service is paused", "Press Resume break timer", "")
 	prefs.timerToggleButton.Enable()
 }
 
@@ -242,11 +259,15 @@ func (prefs *Window) dismiss(saved bool) {
 	}
 }
 
-func (prefs *Window) setStatus(indicator color.NRGBA, text string) {
+func (prefs *Window) setStatus(indicator color.NRGBA, line1 string, line2 string, timerText string) {
 	fyne.Do(func() {
 		prefs.statusIndicator.Color = indicator
 		prefs.statusIndicator.Refresh()
-		prefs.statusDescription.SetText(text)
+		prefs.statusLine1.Text = line1
+		prefs.statusLine1.Refresh()
+		prefs.statusLine2.Text = line2
+		prefs.statusLine2.Refresh()
+		prefs.statusTimer.SetText(timerText)
 	})
 }
 
@@ -258,4 +279,96 @@ func formatDuration(value time.Duration) string {
 	minutes := seconds / 60
 	seconds = seconds % 60
 	return fmt.Sprintf("%02d:%02d", minutes, seconds)
+}
+
+type topRightOverlayLayout struct{}
+
+func (layout *topRightOverlayLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	if len(objects) == 0 {
+		return
+	}
+
+	objects[0].Move(fyne.NewPos(0, 0))
+	objects[0].Resize(size)
+
+	if len(objects) < 2 {
+		return
+	}
+
+	overlay := objects[1]
+	overlaySize := overlay.MinSize()
+	const margin = float32(8)
+	const overlayWidth = float32(96)
+	resizedOverlay := fyne.NewSize(overlayWidth, overlaySize.Height)
+	x := size.Width - resizedOverlay.Width - margin
+	if x < margin {
+		x = margin
+	}
+	overlay.Move(fyne.NewPos(x, margin))
+	overlay.Resize(resizedOverlay)
+}
+
+func (layout *topRightOverlayLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	if len(objects) == 0 {
+		return fyne.NewSize(0, 0)
+	}
+	return objects[0].MinSize()
+}
+
+type statusStackLayout struct{}
+
+func (layout *statusStackLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	if len(objects) < 4 {
+		return
+	}
+
+	indicator := objects[0]
+	line1 := objects[1]
+	line2 := objects[2]
+	timer := objects[3]
+
+	centerX := size.Width / 2
+	y := float32(0)
+
+	placeCentered(indicator, centerX, y)
+	indicatorSize := indicator.MinSize()
+	y += indicatorSize.Height*0.55 + 15
+
+	placeCentered(line1, centerX, y)
+	y += line1.MinSize().Height
+
+	placeCentered(line2, centerX, y)
+	y += line2.MinSize().Height
+
+	placeCentered(timer, centerX, y)
+}
+
+func (layout *statusStackLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	if len(objects) == 0 {
+		return fyne.NewSize(0, 0)
+	}
+
+	width := float32(0)
+	height := float32(0)
+	for _, object := range objects {
+		size := object.MinSize()
+		if size.Width > width {
+			width = size.Width
+		}
+		height += size.Height
+	}
+	return fyne.NewSize(width, height)
+}
+
+func placeCentered(object fyne.CanvasObject, centerX float32, y float32) {
+	size := object.MinSize()
+	x := centerX - size.Width/2
+	object.Move(fyne.NewPos(x, y))
+	object.Resize(size)
+}
+
+func makeScheduleRow(label string, labelWidth float32, entry *widget.Entry, entryWidth float32, unit *widget.Label) fyne.CanvasObject {
+	labelObject := container.NewGridWrap(fyne.NewSize(labelWidth, entry.MinSize().Height), widget.NewLabel(label))
+	entryObject := container.NewGridWrap(fyne.NewSize(entryWidth, entry.MinSize().Height), entry)
+	return container.NewHBox(labelObject, entryObject, unit)
 }
