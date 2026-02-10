@@ -58,6 +58,7 @@ type Engine struct {
 	mu           sync.Mutex
 	config       Config
 	updateSprite func(fyne.Resource)
+	onExercise   func(ExerciseType)
 	cancel       context.CancelFunc
 	rng          *rand.Rand
 }
@@ -128,6 +129,13 @@ func (engine *Engine) Stop() {
 	}
 }
 
+// SetOnExerciseChange sets a callback that is fired when active exercise changes.
+func (engine *Engine) SetOnExerciseChange(handler func(ExerciseType)) {
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+	engine.onExercise = handler
+}
+
 func (engine *Engine) start(parent context.Context, run func(context.Context)) {
 	engine.mu.Lock()
 	if engine.cancel != nil {
@@ -142,6 +150,7 @@ func (engine *Engine) start(parent context.Context, run func(context.Context)) {
 
 func (engine *Engine) runExercise(ctx context.Context, spec ExerciseSpec) {
 	if spec.Type == ExerciseLookOutside {
+		engine.notifyExerciseChange(ExerciseLookOutside)
 		engine.updateSprite(spec.LookOutside)
 		<-ctx.Done()
 		return
@@ -155,20 +164,33 @@ func (engine *Engine) runExercise(ctx context.Context, spec ExerciseSpec) {
 
 	if spec.Type == ExerciseLeftRight && remaining >= engine.config.CombinedSwitchAfter {
 		segment := engine.config.CombinedSwitchAfter
+		engine.notifyExerciseChange(ExerciseLeftRight)
 		engine.runDirectional(ctx, spec, ExerciseLeftRight, segment)
 		remaining -= segment
 		if remaining > 0 {
+			engine.notifyExerciseChange(ExerciseUpDown)
 			engine.runDirectional(ctx, spec, ExerciseUpDown, remaining)
 		}
 		return
 	}
 
 	if spec.Type == ExerciseBlink {
+		engine.notifyExerciseChange(ExerciseBlink)
 		engine.runBlinkExercise(ctx, spec, remaining)
 		return
 	}
 
+	engine.notifyExerciseChange(spec.Type)
 	engine.runDirectional(ctx, spec, spec.Type, remaining)
+}
+
+func (engine *Engine) notifyExerciseChange(exercise ExerciseType) {
+	engine.mu.Lock()
+	handler := engine.onExercise
+	engine.mu.Unlock()
+	if handler != nil {
+		handler(exercise)
+	}
 }
 
 func (engine *Engine) runDirectional(ctx context.Context, spec ExerciseSpec, exercise ExerciseType, duration time.Duration) {

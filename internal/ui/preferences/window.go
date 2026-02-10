@@ -101,15 +101,16 @@ func New(app fyne.App, settings Settings, callbacks Callbacks) *Window {
 
 	form := container.NewVBox(
 		container.NewCenter(heading),
+		newVerticalSpacer(25),
 		makeScheduleRow("Short break every", scheduleLabelWidth, shortInt, valueEntryWidth, labels["shortInterval"]),
 		makeScheduleRow("Short break duration", scheduleLabelWidth, shortDur, valueEntryWidth, labels["shortDuration"]),
 		makeScheduleRow("Long break every", scheduleLabelWidth, longInt, valueEntryWidth, labels["longInterval"]),
 		makeScheduleRow("Long break duration", scheduleLabelWidth, longDur, valueEntryWidth, labels["longDuration"]),
 		strict,
 		idleCheck,
+		fullscreen,
 		widget.NewLabel("Overlay opacity"),
 		opacity,
-		fullscreen,
 	)
 
 	saveButton := widget.NewButton("Save", nil)
@@ -119,7 +120,7 @@ func New(app fyne.App, settings Settings, callbacks Callbacks) *Window {
 	timerToggleButton := widget.NewButton("Pause break timer", nil)
 	timerToggleButton.Disable()
 	buttons := container.NewHBox(saveWrap, layout.NewSpacer(), cancelWrap)
-	footer := container.NewVBox(buttons, timerToggleButton)
+	footer := container.NewVBox(newVerticalSpacer(15), buttons, timerToggleButton)
 
 	formWithOverlay := container.New(&topRightOverlayLayout{}, form, statusBox)
 	content := container.NewBorder(nil, footer, nil, nil, formWithOverlay)
@@ -281,6 +282,12 @@ func formatDuration(value time.Duration) string {
 	return fmt.Sprintf("%02d:%02d", minutes, seconds)
 }
 
+func newVerticalSpacer(height float32) fyne.CanvasObject {
+	spacer := canvas.NewRectangle(color.Transparent)
+	spacer.SetMinSize(fyne.NewSize(1, height))
+	return spacer
+}
+
 type topRightOverlayLayout struct{}
 
 func (layout *topRightOverlayLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
@@ -297,7 +304,7 @@ func (layout *topRightOverlayLayout) Layout(objects []fyne.CanvasObject, size fy
 
 	overlay := objects[1]
 	overlaySize := overlay.MinSize()
-	const margin = float32(8)
+	const margin = float32(0)
 	const overlayWidth = float32(96)
 	resizedOverlay := fyne.NewSize(overlayWidth, overlaySize.Height)
 	x := size.Width - resizedOverlay.Width - margin
@@ -332,7 +339,7 @@ func (layout *statusStackLayout) Layout(objects []fyne.CanvasObject, size fyne.S
 
 	placeCentered(indicator, centerX, y)
 	indicatorSize := indicator.MinSize()
-	y += indicatorSize.Height*0.55 + 15
+	y += indicatorSize.Height*0.55 + 8
 
 	placeCentered(line1, centerX, y)
 	y += line1.MinSize().Height
