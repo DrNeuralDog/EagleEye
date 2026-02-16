@@ -24,6 +24,30 @@ const (
 	serviceStatePaused
 )
 
+const (
+	statusBarMainTextSize  = float32(11)
+	statusTimerTextSize    = float32(12) // slightly larger than main status line
+	statusIndicatorSize    = float32(18)
+	statusBarFromFooterGap = float32(2) // space between timer button and divider line
+
+	prefsWindowWidth          = float32(560)
+	scheduleLabelWidthEN      = float32(190)
+	scheduleLabelExtraRU      = prefsWindowWidth * 0.2 // ~20% of fixed preferences width
+	valueEntryWidth           = float32(60)
+	languageSelectWrapWidth   = float32(142)
+	strictModeTopSpacerHeight = float32(8)
+	saveCancelButtonWidth     = float32(130 * 1.4)
+	saveCancelButtonHeight    = float32(40)
+	// Vertical gap between run-on-startup, language row, and overlay opacity label.
+	preferencesMidFormGap = float32(12)
+)
+
+var (
+	statusHintColor     = color.NRGBA{R: 200, G: 200, B: 200, A: 255}
+	statusTimerColor    = color.NRGBA{R: 252, G: 252, B: 252, A: 255}
+	statusBarDividerClr = color.NRGBA{R: 72, G: 72, B: 72, A: 255}
+)
+
 // Callbacks defines preferences window actions.
 type Callbacks struct {
 	OnSave        func(Settings)
@@ -36,8 +60,8 @@ type Callbacks struct {
 type Window struct {
 	window    fyne.Window
 	settings  Settings
-	callbacks Callbacks
-	localizer *i18n.Localizer
+	callbacks    Callbacks
+	uiLocalizer *i18n.Localizer
 
 	labels             map[string]*widget.Label
 	scheduleLabels     map[string]*widget.Label
@@ -50,28 +74,29 @@ type Window struct {
 	idleCheck          *widget.Check
 	opacity            *widget.Slider
 	fullscreen         *widget.Check
+	runOnStartup       *widget.Check
 	languageLabel      *widget.Label
 	languageSelect     *widget.Select
 	overlayOpacityText *widget.Label
 	saveButton         *widget.Button
 	cancelButton       *widget.Button
 
-	statusIndicator   *canvas.Text
-	statusLine1       *canvas.Text
-	statusLine2       *canvas.Text
-	statusTimer       *widget.Label
-	timerToggleButton *widget.Button
+	statusIndicatorDot *canvas.Circle
+	statusBarMain      *canvas.Text
+	statusBarTimer     *canvas.Text
+	timerToggleButton  *widget.Button
+
+	scheduleSection      *fyne.Container
+	scheduleLayoutLang   string
 
 	currentServiceState serviceState
 	runningTimerText    string
 }
 
 // New creates a preferences window.
-func New(app fyne.App, settings Settings, callbacks Callbacks, localizer *i18n.Localizer) *Window {
-	if localizer == nil {
-		localizer = i18n.New(i18n.LanguageEN)
-	}
-	window := app.NewWindow(localizer.T("prefs.windowTitle"))
+func New(app fyne.App, settings Settings, callbacks Callbacks) *Window {
+	uiLocalizer := i18n.New(settings.Language)
+	window := app.NewWindow(uiLocalizer.T("prefs.windowTitle"))
 	if app.Icon() != nil {
 		window.SetIcon(app.Icon())
 	}
@@ -99,23 +124,32 @@ func New(app fyne.App, settings Settings, callbacks Callbacks, localizer *i18n.L
 	fullscreen := widget.NewCheck("", nil)
 	fullscreen.SetChecked(settings.Fullscreen)
 
+	runOnStartup := widget.NewCheck("", nil)
+	runOnStartup.SetChecked(settings.RunOnStartup)
+
 	languageSelect := widget.NewSelect(i18n.LanguageOptions(), nil)
 	languageSelect.SetSelected(i18n.LanguageDisplayName(settings.Language))
 
-	statusIndicator := canvas.NewText("●", color.NRGBA{R: 128, G: 128, B: 128, A: 255})
-	statusIndicator.TextSize = 46
-	statusLine1 := canvas.NewText("", color.NRGBA{R: 200, G: 200, B: 200, A: 255})
-	statusLine1.TextSize = 9
-	statusLine1.Alignment = fyne.TextAlignCenter
-	statusLine2 := canvas.NewText("", color.NRGBA{R: 200, G: 200, B: 200, A: 255})
-	statusLine2.TextSize = 9
-	statusLine2.Alignment = fyne.TextAlignCenter
-	statusTimer := widget.NewLabel("")
-	statusTimer.Alignment = fyne.TextAlignCenter
-	statusBox := container.New(&statusStackLayout{}, statusIndicator, statusLine1, statusLine2, statusTimer)
+	statusDot := canvas.NewCircle(color.NRGBA{R: 128, G: 128, B: 128, A: 255})
+	statusDot.StrokeWidth = 0
+	statusIndicatorWrap := container.NewGridWrap(fyne.NewSize(statusIndicatorSize, statusIndicatorSize), statusDot)
+	statusBarMain := canvas.NewText("", statusHintColor)
+	statusBarMain.TextSize = statusBarMainTextSize
+	statusBarMain.Alignment = fyne.TextAlignLeading
+	statusBarTimer := canvas.NewText("", statusTimerColor)
+	statusBarTimer.TextSize = statusTimerTextSize
+	statusBarTimer.Alignment = fyne.TextAlignLeading
+	statusTextLine := container.NewHBox(statusBarMain, statusBarTimer)
+	statusTextArea := container.NewMax(statusTextLine)
+	indicatorCell := container.NewVBox(layout.NewSpacer(), statusIndicatorWrap, layout.NewSpacer())
+	// Center = full-width text (leading); right = indicator pinned to window/content right edge.
+	statusRow := container.NewBorder(nil, nil, nil, indicatorCell, statusTextArea)
+	statusDivider := canvas.NewRectangle(statusBarDividerClr)
+	statusDivider.SetMinSize(fyne.NewSize(1, 1))
+	statusBar := container.NewBorder(statusDivider, nil, nil, nil, container.NewPadded(statusRow))
 
 	heading := canvas.NewText("", theme.ForegroundColor())
-	heading.TextSize = 18
+	heading.TextSize = 19
 	heading.TextStyle = fyne.TextStyle{Bold: true}
 	heading.Alignment = fyne.TextAlignCenter
 
@@ -131,48 +165,57 @@ func New(app fyne.App, settings Settings, callbacks Callbacks, localizer *i18n.L
 		"longInterval":  widget.NewLabel(""),
 		"longDuration":  widget.NewLabel(""),
 	}
-	const valueEntryWidth = float32(60)
-	const scheduleLabelWidth = float32(190)
+
+	initLang := i18n.NormalizeLanguage(settings.Language)
+	initLabelWidth := scheduleLabelWidthForLang(initLang)
+	scheduleRows := buildScheduleRowGroup(scheduleLabels, labels, initLabelWidth, shortInt, shortDur, longInt, longDur)
+	scheduleSection := container.NewVBox(scheduleRows...)
 
 	languageLabel := widget.NewLabel("")
+	languageSelectWrap := container.NewGridWrap(
+		fyne.NewSize(languageSelectWrapWidth, languageSelect.MinSize().Height),
+		languageSelect,
+	)
+	languageRow := container.NewHBox(languageLabel, languageSelectWrap, layout.NewSpacer())
+
 	overlayOpacityLabel := widget.NewLabel("")
 	form := container.NewVBox(
 		newVerticalSpacer(5),
 		container.NewCenter(heading),
 		newVerticalSpacer(20),
-		makeScheduleRow(scheduleLabels["shortInterval"], scheduleLabelWidth, shortInt, valueEntryWidth, labels["shortInterval"]),
-		makeScheduleRow(scheduleLabels["shortDuration"], scheduleLabelWidth, shortDur, valueEntryWidth, labels["shortDuration"]),
-		makeScheduleRow(scheduleLabels["longInterval"], scheduleLabelWidth, longInt, valueEntryWidth, labels["longInterval"]),
-		makeScheduleRow(scheduleLabels["longDuration"], scheduleLabelWidth, longDur, valueEntryWidth, labels["longDuration"]),
+		scheduleSection,
+		newVerticalSpacer(strictModeTopSpacerHeight),
 		strict,
 		idleCheck,
 		fullscreen,
-		languageLabel,
-		languageSelect,
+		runOnStartup,
+		newVerticalSpacer(preferencesMidFormGap),
+		languageRow,
+		newVerticalSpacer(preferencesMidFormGap),
 		overlayOpacityLabel,
 		opacity,
 	)
 
 	saveButton := widget.NewButton("", nil)
 	cancelButton := widget.NewButton("", nil)
-	saveWrap := container.NewGridWrap(fyne.NewSize(130, 40), saveButton)
-	cancelWrap := container.NewGridWrap(fyne.NewSize(130, 40), cancelButton)
+	saveWrap := container.NewGridWrap(fyne.NewSize(saveCancelButtonWidth, saveCancelButtonHeight), saveButton)
+	cancelWrap := container.NewGridWrap(fyne.NewSize(saveCancelButtonWidth, saveCancelButtonHeight), cancelButton)
 	timerToggleButton := widget.NewButton("", nil)
 	timerToggleButton.Disable()
 	buttons := container.NewHBox(saveWrap, layout.NewSpacer(), cancelWrap)
 	footer := container.NewVBox(newVerticalSpacer(15), buttons, timerToggleButton)
 
-	formWithOverlay := container.New(&topRightOverlayLayout{}, form, statusBox)
-	content := container.NewBorder(nil, footer, nil, nil, formWithOverlay)
+	center := container.NewVBox(form, footer, newVerticalSpacer(statusBarFromFooterGap))
+	content := container.NewBorder(nil, statusBar, nil, nil, center)
 	window.SetContent(content)
-	window.Resize(fyne.NewSize(560, 520))
+	window.Resize(fyne.NewSize(prefsWindowWidth, 520))
 	window.SetFixedSize(true)
 
 	prefs := &Window{
 		window:              window,
 		settings:            settings,
 		callbacks:           callbacks,
-		localizer:           localizer,
+		uiLocalizer:         uiLocalizer,
 		labels:              labels,
 		scheduleLabels:      scheduleLabels,
 		heading:             heading,
@@ -184,20 +227,26 @@ func New(app fyne.App, settings Settings, callbacks Callbacks, localizer *i18n.L
 		idleCheck:           idleCheck,
 		opacity:             opacity,
 		fullscreen:          fullscreen,
+		runOnStartup:        runOnStartup,
 		languageLabel:       languageLabel,
 		languageSelect:      languageSelect,
 		overlayOpacityText:  overlayOpacityLabel,
 		saveButton:          saveButton,
 		cancelButton:        cancelButton,
-		statusIndicator:     statusIndicator,
-		statusLine1:         statusLine1,
-		statusLine2:         statusLine2,
-		statusTimer:         statusTimer,
+		statusIndicatorDot:  statusDot,
+		statusBarMain:       statusBarMain,
+		statusBarTimer:      statusBarTimer,
 		timerToggleButton:   timerToggleButton,
+		scheduleSection:     scheduleSection,
+		scheduleLayoutLang:  initLang,
 		currentServiceState: serviceStateNotStarted,
 	}
 
 	saveButton.OnTapped = prefs.handleSave
+	prefs.languageSelect.OnChanged = func(string) {
+		prefs.uiLocalizer.SetLanguage(i18n.LanguageFromDisplayName(prefs.languageSelect.Selected))
+		prefs.RefreshLocalization()
+	}
 	cancelButton.OnTapped = func() {
 		prefs.dismiss(false)
 	}
@@ -221,9 +270,15 @@ func (prefs *Window) Show() {
 	prefs.window.RequestFocus()
 }
 
+// Window returns the underlying fyne window.
+func (prefs *Window) Window() fyne.Window {
+	return prefs.window
+}
+
 // UpdateSettings replaces window values.
 func (prefs *Window) UpdateSettings(settings Settings) {
 	prefs.settings = settings
+	prefs.uiLocalizer.SetLanguage(settings.Language)
 	prefs.shortInt.SetText(fmt.Sprintf("%d", int(settings.ShortInterval.Minutes())))
 	prefs.shortDur.SetText(fmt.Sprintf("%d", int(settings.ShortDuration.Seconds())))
 	prefs.longInt.SetText(fmt.Sprintf("%d", int(settings.LongInterval.Minutes())))
@@ -233,36 +288,41 @@ func (prefs *Window) UpdateSettings(settings Settings) {
 	prefs.opacity.Value = settings.OverlayOpacity
 	prefs.opacity.Refresh()
 	prefs.fullscreen.SetChecked(settings.Fullscreen)
+	prefs.runOnStartup.SetChecked(settings.RunOnStartup)
 	prefs.languageSelect.SetSelected(i18n.LanguageDisplayName(settings.Language))
+	prefs.RefreshLocalization()
 }
 
 // RefreshLocalization refreshes all static UI texts based on the current language.
 func (prefs *Window) RefreshLocalization() {
 	fyne.Do(func() {
-		prefs.window.SetTitle(prefs.localizer.T("prefs.windowTitle"))
-		prefs.heading.Text = prefs.localizer.T("prefs.headingGeneral")
+		prefs.window.SetTitle(prefs.uiLocalizer.T("prefs.windowTitle"))
+		prefs.heading.Text = prefs.uiLocalizer.T("prefs.headingGeneral")
 		prefs.heading.Refresh()
 
-		prefs.scheduleLabels["shortInterval"].SetText(prefs.localizer.T("prefs.shortBreakEvery"))
-		prefs.scheduleLabels["shortDuration"].SetText(prefs.localizer.T("prefs.shortBreakDuration"))
-		prefs.scheduleLabels["longInterval"].SetText(prefs.localizer.T("prefs.longBreakEvery"))
-		prefs.scheduleLabels["longDuration"].SetText(prefs.localizer.T("prefs.longBreakDuration"))
-		prefs.labels["shortInterval"].SetText(prefs.localizer.T("unit.min"))
-		prefs.labels["shortDuration"].SetText(prefs.localizer.T("unit.sec"))
-		prefs.labels["longInterval"].SetText(prefs.localizer.T("unit.min"))
-		prefs.labels["longDuration"].SetText(prefs.localizer.T("unit.min"))
+		prefs.scheduleLabels["shortInterval"].SetText(prefs.uiLocalizer.T("prefs.shortBreakEvery"))
+		prefs.scheduleLabels["shortDuration"].SetText(prefs.uiLocalizer.T("prefs.shortBreakDuration"))
+		prefs.scheduleLabels["longInterval"].SetText(prefs.uiLocalizer.T("prefs.longBreakEvery"))
+		prefs.scheduleLabels["longDuration"].SetText(prefs.uiLocalizer.T("prefs.longBreakDuration"))
+		prefs.labels["shortInterval"].SetText(prefs.uiLocalizer.T("unit.min"))
+		prefs.labels["shortDuration"].SetText(prefs.uiLocalizer.T("unit.sec"))
+		prefs.labels["longInterval"].SetText(prefs.uiLocalizer.T("unit.min"))
+		prefs.labels["longDuration"].SetText(prefs.uiLocalizer.T("unit.min"))
 
-		prefs.strict.Text = prefs.localizer.T("prefs.strictMode")
+		prefs.strict.Text = prefs.uiLocalizer.T("prefs.strictMode")
 		prefs.strict.Refresh()
-		prefs.idleCheck.Text = prefs.localizer.T("prefs.idleTracking")
+		prefs.idleCheck.Text = prefs.uiLocalizer.T("prefs.idleTracking")
 		prefs.idleCheck.Refresh()
-		prefs.fullscreen.Text = prefs.localizer.T("prefs.fullscreenOverlay")
+		prefs.fullscreen.Text = prefs.uiLocalizer.T("prefs.fullscreenOverlay")
 		prefs.fullscreen.Refresh()
-		prefs.languageLabel.SetText(prefs.localizer.T("prefs.language"))
-		prefs.overlayOpacityText.SetText(prefs.localizer.T("prefs.overlayOpacity"))
-		prefs.saveButton.SetText(prefs.localizer.T("prefs.save"))
-		prefs.cancelButton.SetText(prefs.localizer.T("prefs.cancel"))
+		prefs.runOnStartup.Text = prefs.uiLocalizer.T("prefs.runOnStartup")
+		prefs.runOnStartup.Refresh()
+		prefs.languageLabel.SetText(prefs.uiLocalizer.T("prefs.language"))
+		prefs.overlayOpacityText.SetText(prefs.uiLocalizer.T("prefs.overlayOpacity"))
+		prefs.saveButton.SetText(prefs.uiLocalizer.T("prefs.save"))
+		prefs.cancelButton.SetText(prefs.uiLocalizer.T("prefs.cancel"))
 		prefs.renderServiceStatus()
+		prefs.refreshScheduleLayoutIfNeeded()
 	})
 }
 
@@ -306,13 +366,13 @@ func (prefs *Window) SetServicePaused() {
 func (prefs *Window) SetTimerControlState(isRunning bool) {
 	fyne.Do(func() {
 		if prefs.currentServiceState == serviceStateNotStarted {
-			prefs.timerToggleButton.SetText(prefs.localizer.T("prefs.start"))
+			prefs.timerToggleButton.SetText(prefs.uiLocalizer.T("prefs.start"))
 			return
 		}
 		if isRunning {
-			prefs.timerToggleButton.SetText(prefs.localizer.T("prefs.pauseBreakTimer"))
+			prefs.timerToggleButton.SetText(prefs.uiLocalizer.T("prefs.pauseBreakTimer"))
 		} else {
-			prefs.timerToggleButton.SetText(prefs.localizer.T("prefs.resumeBreakTimer"))
+			prefs.timerToggleButton.SetText(prefs.uiLocalizer.T("prefs.resumeBreakTimer"))
 		}
 	})
 }
@@ -337,6 +397,7 @@ func (prefs *Window) handleSave() {
 	settings.IdleEnabled = prefs.idleCheck.Checked
 	settings.OverlayOpacity = prefs.opacity.Value
 	settings.Fullscreen = prefs.fullscreen.Checked
+	settings.RunOnStartup = prefs.runOnStartup.Checked
 	settings.Language = i18n.LanguageFromDisplayName(prefs.languageSelect.Selected)
 
 	prefs.settings = settings
@@ -355,6 +416,11 @@ func parsePositiveInt(value string) (int, bool) {
 
 func (prefs *Window) dismiss(saved bool) {
 	prefs.window.Hide()
+	if !saved {
+		prefs.uiLocalizer.SetLanguage(prefs.settings.Language)
+		prefs.languageSelect.SetSelected(i18n.LanguageDisplayName(prefs.settings.Language))
+		prefs.RefreshLocalization()
+	}
 	if !saved && prefs.callbacks.OnCancel != nil {
 		prefs.callbacks.OnCancel()
 	}
@@ -366,28 +432,34 @@ func (prefs *Window) dismiss(saved bool) {
 func (prefs *Window) renderServiceStatus() {
 	switch prefs.currentServiceState {
 	case serviceStateRunning:
-		prefs.statusIndicator.Color = color.NRGBA{R: 57, G: 176, B: 99, A: 255}
-		prefs.statusLine1.Text = prefs.localizer.T("prefs.serviceRunningLine")
-		prefs.statusLine2.Text = prefs.localizer.T("prefs.nextBreakLine")
-		prefs.statusTimer.SetText(prefs.runningTimerText)
-		prefs.timerToggleButton.SetText(prefs.localizer.T("prefs.pauseBreakTimer"))
+		prefs.statusIndicatorDot.FillColor = color.NRGBA{R: 57, G: 176, B: 99, A: 255}
+		prefs.statusBarMain.Text = fmt.Sprintf("%s — %s ",
+			prefs.uiLocalizer.T("prefs.serviceRunningLine"),
+			prefs.uiLocalizer.T("prefs.nextBreakLine"),
+		)
+		prefs.statusBarTimer.Text = prefs.runningTimerText
+		prefs.timerToggleButton.SetText(prefs.uiLocalizer.T("prefs.pauseBreakTimer"))
 	case serviceStatePaused:
-		prefs.statusIndicator.Color = color.NRGBA{R: 232, G: 190, B: 66, A: 255}
-		prefs.statusLine1.Text = prefs.localizer.T("prefs.servicePausedLine")
-		prefs.statusLine2.Text = prefs.localizer.T("prefs.pressResumeLine")
-		prefs.statusTimer.SetText("")
-		prefs.timerToggleButton.SetText(prefs.localizer.T("prefs.resumeBreakTimer"))
+		prefs.statusIndicatorDot.FillColor = color.NRGBA{R: 232, G: 190, B: 66, A: 255}
+		prefs.statusBarMain.Text = fmt.Sprintf("%s — %s",
+			prefs.uiLocalizer.T("prefs.servicePausedLine"),
+			prefs.uiLocalizer.T("prefs.pressResumeLine"),
+		)
+		prefs.statusBarTimer.Text = ""
+		prefs.timerToggleButton.SetText(prefs.uiLocalizer.T("prefs.resumeBreakTimer"))
 	default:
-		prefs.statusIndicator.Color = color.NRGBA{R: 128, G: 128, B: 128, A: 255}
-		prefs.statusLine1.Text = prefs.localizer.T("prefs.serviceNotStartedLine")
-		prefs.statusLine2.Text = prefs.localizer.T("prefs.pressStartLine")
-		prefs.statusTimer.SetText("")
-		prefs.timerToggleButton.SetText(prefs.localizer.T("prefs.start"))
+		prefs.statusIndicatorDot.FillColor = color.NRGBA{R: 128, G: 128, B: 128, A: 255}
+		prefs.statusBarMain.Text = fmt.Sprintf("%s — %s",
+			prefs.uiLocalizer.T("prefs.serviceNotStartedLine"),
+			prefs.uiLocalizer.T("prefs.pressStartLine"),
+		)
+		prefs.statusBarTimer.Text = ""
+		prefs.timerToggleButton.SetText(prefs.uiLocalizer.T("prefs.start"))
 	}
 
-	prefs.statusIndicator.Refresh()
-	prefs.statusLine1.Refresh()
-	prefs.statusLine2.Refresh()
+	prefs.statusIndicatorDot.Refresh()
+	prefs.statusBarMain.Refresh()
+	prefs.statusBarTimer.Refresh()
 }
 
 func formatDuration(value time.Duration) string {
@@ -406,94 +478,48 @@ func newVerticalSpacer(height float32) fyne.CanvasObject {
 	return spacer
 }
 
-type topRightOverlayLayout struct{}
-
-func (layout *topRightOverlayLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
-	if len(objects) == 0 {
-		return
-	}
-
-	objects[0].Move(fyne.NewPos(0, 0))
-	objects[0].Resize(size)
-
-	if len(objects) < 2 {
-		return
-	}
-
-	overlay := objects[1]
-	overlaySize := overlay.MinSize()
-	const margin = float32(0)
-	const overlayWidth = float32(96)
-	resizedOverlay := fyne.NewSize(overlayWidth, overlaySize.Height)
-	x := size.Width - resizedOverlay.Width - margin
-	if x < margin {
-		x = margin
-	}
-	overlay.Move(fyne.NewPos(x, -6))
-	overlay.Resize(resizedOverlay)
-}
-
-func (layout *topRightOverlayLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
-	if len(objects) == 0 {
-		return fyne.NewSize(0, 0)
-	}
-	return objects[0].MinSize()
-}
-
-type statusStackLayout struct{}
-
-func (layout *statusStackLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
-	if len(objects) < 4 {
-		return
-	}
-
-	indicator := objects[0]
-	line1 := objects[1]
-	line2 := objects[2]
-	timer := objects[3]
-
-	centerX := size.Width / 2
-	y := float32(-5)
-
-	placeCentered(indicator, centerX, y)
-	indicatorSize := indicator.MinSize()
-	y += indicatorSize.Height*0.55 + 8
-
-	placeCentered(line1, centerX, y)
-	y += line1.MinSize().Height
-
-	placeCentered(line2, centerX, y)
-	y += line2.MinSize().Height
-
-	placeCentered(timer, centerX, y)
-}
-
-func (layout *statusStackLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
-	if len(objects) == 0 {
-		return fyne.NewSize(0, 0)
-	}
-
-	width := float32(0)
-	height := float32(0)
-	for _, object := range objects {
-		size := object.MinSize()
-		if size.Width > width {
-			width = size.Width
-		}
-		height += size.Height
-	}
-	return fyne.NewSize(width, height)
-}
-
-func placeCentered(object fyne.CanvasObject, centerX float32, y float32) {
-	size := object.MinSize()
-	x := centerX - size.Width/2
-	object.Move(fyne.NewPos(x, y))
-	object.Resize(size)
-}
-
 func makeScheduleRow(label *widget.Label, labelWidth float32, entry *widget.Entry, entryWidth float32, unit *widget.Label) fyne.CanvasObject {
 	labelObject := container.NewGridWrap(fyne.NewSize(labelWidth, entry.MinSize().Height), label)
 	entryObject := container.NewGridWrap(fyne.NewSize(entryWidth, entry.MinSize().Height), entry)
 	return container.NewHBox(labelObject, entryObject, unit)
+}
+
+func scheduleLabelWidthForLang(lang string) float32 {
+	if i18n.NormalizeLanguage(lang) == i18n.LanguageRU {
+		return scheduleLabelWidthEN + scheduleLabelExtraRU
+	}
+	return scheduleLabelWidthEN
+}
+
+func buildScheduleRowGroup(
+	scheduleLabels map[string]*widget.Label,
+	labels map[string]*widget.Label,
+	labelWidth float32,
+	shortInt, shortDur, longInt, longDur *widget.Entry,
+) []fyne.CanvasObject {
+	return []fyne.CanvasObject{
+		makeScheduleRow(scheduleLabels["shortInterval"], labelWidth, shortInt, valueEntryWidth, labels["shortInterval"]),
+		makeScheduleRow(scheduleLabels["shortDuration"], labelWidth, shortDur, valueEntryWidth, labels["shortDuration"]),
+		makeScheduleRow(scheduleLabels["longInterval"], labelWidth, longInt, valueEntryWidth, labels["longInterval"]),
+		makeScheduleRow(scheduleLabels["longDuration"], labelWidth, longDur, valueEntryWidth, labels["longDuration"]),
+	}
+}
+
+func (prefs *Window) refreshScheduleLayoutIfNeeded() {
+	lang := i18n.NormalizeLanguage(prefs.uiLocalizer.Language())
+	if lang == prefs.scheduleLayoutLang {
+		return
+	}
+	labelWidth := scheduleLabelWidthForLang(lang)
+	prefs.scheduleSection.Objects = buildScheduleRowGroup(
+		prefs.scheduleLabels,
+		prefs.labels,
+		labelWidth,
+		prefs.shortInt,
+		prefs.shortDur,
+		prefs.longInt,
+		prefs.longDur,
+	)
+	prefs.scheduleSection.Refresh()
+	prefs.scheduleLayoutLang = lang
 }
