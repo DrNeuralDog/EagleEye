@@ -1,17 +1,89 @@
+param(
+    [Parameter(Mandatory = $false)]
+    [switch]$RunGoModTidy,
+    [Parameter(Mandatory = $false)]
+    [switch]$AllowGoNetwork,
+    [Parameter(Mandatory = $false)]
+    [int]$CommandTimeoutSeconds = 600
+)
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+if ($CommandTimeoutSeconds -lt 30) {
+    $CommandTimeoutSeconds = 30
+}
+$script:CommandTimeoutSeconds = $CommandTimeoutSeconds
+
+function Format-CommandArguments {
+    param(
+        [Parameter(Mandatory = $false)]
+        [string[]]$Arguments = @()
+    )
+
+    return ($Arguments | ForEach-Object {
+            if ($_ -match '[\s"]') {
+                '"' + ($_ -replace '"', '\"') + '"'
+            }
+            else {
+                $_
+            }
+        }) -join ' '
+}
 
 function Invoke-NativeCommand {
     param(
         [Parameter(Mandatory = $true)]
         [string]$FilePath,
         [Parameter(Mandatory = $false)]
-        [string[]]$Arguments = @()
+        [string[]]$Arguments = @(),
+        [Parameter(Mandatory = $false)]
+        [int]$TimeoutSeconds = $script:CommandTimeoutSeconds
     )
 
-    & $FilePath @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "Command failed with exit code ${LASTEXITCODE}: $FilePath $($Arguments -join ' ')"
+    $argumentLine = Format-CommandArguments -Arguments $Arguments
+    Write-Host ">> $FilePath $argumentLine"
+
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $FilePath
+    $startInfo.Arguments = $argumentLine
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.CreateNoWindow = $true
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $startInfo
+
+    if (-not $process.Start()) {
+        throw "Failed to start command: $FilePath $argumentLine"
+    }
+
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+
+    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+        try {
+            $process.Kill()
+        }
+        catch {
+            # no-op
+        }
+        throw "Command timed out after ${TimeoutSeconds}s: $FilePath $argumentLine"
+    }
+    $process.WaitForExit()
+
+    $stdout = $stdoutTask.GetAwaiter().GetResult()
+    if (-not [string]::IsNullOrWhiteSpace($stdout)) {
+        Write-Host ($stdout.TrimEnd())
+    }
+
+    $stderr = $stderrTask.GetAwaiter().GetResult()
+    if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+        Write-Host ($stderr.TrimEnd())
+    }
+
+    if ($process.ExitCode -ne 0) {
+        throw "Command failed with exit code $($process.ExitCode): $FilePath $argumentLine"
     }
 }
 
@@ -147,12 +219,29 @@ $tempIcoPath = Join-Path $env:TEMP "EagleEye_build_icon.ico"
 
 $goExe = Resolve-GoExecutable
 Assert-GoMinimumVersion -GoExe $goExe -MinimumMinor 21
+Write-Host "Using Go executable: $goExe"
+Write-Host "Command timeout: $CommandTimeoutSeconds seconds"
+$goProxyMode = if ($AllowGoNetwork) { "https://proxy.golang.org,direct" } else { "off" }
+$goSumDBMode = if ($AllowGoNetwork) { "sum.golang.org" } else { "off" }
+$env:GOPROXY = $goProxyMode
+$env:GOSUMDB = $goSumDBMode
+Write-Host "Go module network: GOPROXY=$goProxyMode; GOSUMDB=$goSumDBMode"
 
 if (-not (Test-Path $rsrcExe)) {
+    if (-not $AllowGoNetwork) {
+        throw "rsrc.exe not found at '$rsrcExe', and Go network is disabled. Re-run once with -AllowGoNetwork."
+    }
+    Write-Host "rsrc.exe not found, installing..."
     Invoke-NativeCommand -FilePath $goExe -Arguments @("install", "github.com/akavel/rsrc@latest")
 }
 
-Invoke-NativeCommand -FilePath $goExe -Arguments @("mod", "tidy")
+if ($RunGoModTidy) {
+    Write-Host "Running go mod tidy..."
+    Invoke-NativeCommand -FilePath $goExe -Arguments @("mod", "tidy")
+}
+else {
+    Write-Host "Skipping go mod tidy (enable with -RunGoModTidy)."
+}
 New-Item -ItemType Directory -Force $binPath | Out-Null
 
 $resolvedIcon = (Resolve-Path $iconPngPath).Path
@@ -165,7 +254,7 @@ $sysoPath = Join-Path $srcPath ("rsrc_windows_{0}.syso" -f $goArch)
 Convert-PngToIco -PngPath $resolvedIcon -IcoPath $tempIcoPath
 try {
     Invoke-NativeCommand -FilePath $rsrcExe -Arguments @("-ico", $tempIcoPath, "-arch", $goArch, "-o", $sysoPath)
-    Invoke-NativeCommand -FilePath $goExe -Arguments @("build", "-ldflags", "-H=windowsgui", "-o", $exePath, "./cmd")
+    Invoke-NativeCommand -FilePath $goExe -Arguments @("build", "-buildvcs=false", "-ldflags", "-H=windowsgui", "-o", $exePath, "./cmd")
 }
 finally {
     if (Test-Path $tempIcoPath) {
