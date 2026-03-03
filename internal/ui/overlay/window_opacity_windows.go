@@ -15,9 +15,9 @@ const (
 )
 
 var (
-	user32DLL = syscall.NewLazyDLL("user32.dll")
-	procGetWindowLongPtrW = user32DLL.NewProc("GetWindowLongPtrW")
-	procSetWindowLongPtrW = user32DLL.NewProc("SetWindowLongPtrW")
+	user32DLL                      = syscall.NewLazyDLL("user32.dll")
+	procGetWindowLongPtrW          = user32DLL.NewProc("GetWindowLongPtrW")
+	procSetWindowLongPtrW          = user32DLL.NewProc("SetWindowLongPtrW")
 	procSetLayeredWindowAttributes = user32DLL.NewProc("SetLayeredWindowAttributes")
 )
 
@@ -28,18 +28,12 @@ func (overlay *Window) applyNativeOpacity(alpha uint8) {
 	}
 
 	nativeWindow.RunNative(func(context any) {
-		var hwnd uintptr
-		switch value := context.(type) {
-		case driver.WindowsWindowContext:
-			hwnd = value.HWND
-		case *driver.WindowsWindowContext:
-			hwnd = value.HWND
-		default:
-			return
-		}
+		hwnd := extractHWND(context)
 		if hwnd == 0 {
 			return
 		}
+
+		overlay.cachedHWND = hwnd
 
 		style, _, _ := procGetWindowLongPtrW.Call(hwnd, int32ToUintptr(gwlExStyle))
 		if style&wsExLayered == 0 {
@@ -47,6 +41,17 @@ func (overlay *Window) applyNativeOpacity(alpha uint8) {
 		}
 		procSetLayeredWindowAttributes.Call(hwnd, 0, uintptr(alpha), uintptr(lwaAlpha))
 	})
+}
+
+func extractHWND(context any) uintptr {
+	switch value := context.(type) {
+	case driver.WindowsWindowContext:
+		return value.HWND
+	case *driver.WindowsWindowContext:
+		return value.HWND
+	default:
+		return 0
+	}
 }
 
 func int32ToUintptr(value int32) uintptr {
