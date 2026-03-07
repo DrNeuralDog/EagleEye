@@ -9,12 +9,14 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/systray"
 )
 
 // Callbacks defines tray action handlers.
 type Callbacks struct {
 	OnPreferences func()
 	OnTogglePause func()
+	OnForceNext   func()
 	OnSkipBreak   func()
 	OnPauseFor    func(time.Duration)
 	OnForceLong   func()
@@ -30,6 +32,7 @@ type Manager struct {
 	localizer *i18n.Localizer
 
 	statusItem      *fyne.MenuItem
+	forceNextItem   *fyne.MenuItem
 	preferencesItem *fyne.MenuItem
 	pauseItem       *fyne.MenuItem
 	skipItem        *fyne.MenuItem
@@ -44,6 +47,8 @@ type Manager struct {
 	paused      bool
 	inBreak     bool
 	statusLabel string
+
+	tooltipEnabled bool
 }
 
 // New creates a tray manager with the provided callbacks.
@@ -60,6 +65,12 @@ func New(app desktop.App, callbacks Callbacks, localizer *i18n.Localizer) *Manag
 
 	manager.statusItem = fyne.NewMenuItem("", nil)
 	manager.statusItem.Disabled = true
+
+	manager.forceNextItem = fyne.NewMenuItem("", func() {
+		if manager.callbacks.OnForceNext != nil {
+			manager.callbacks.OnForceNext()
+		}
+	})
 
 	manager.preferencesItem = fyne.NewMenuItem("", func() {
 		if manager.callbacks.OnPreferences != nil {
@@ -138,7 +149,9 @@ func (manager *Manager) SetStatus(status string) {
 		manager.mu.Lock()
 		defer manager.mu.Unlock()
 		manager.statusLabel = status
+		manager.tooltipEnabled = true
 		manager.refreshStatusLocked()
+		manager.refreshMenuLocked()
 	})
 }
 
@@ -149,7 +162,7 @@ func (manager *Manager) SetPaused(paused bool) {
 		defer manager.mu.Unlock()
 		manager.paused = paused
 		manager.refreshLocalizationLocked()
-		manager.refreshStatusLocked()
+		manager.refreshMenuLocked()
 	})
 }
 
@@ -159,12 +172,14 @@ func (manager *Manager) SetInBreak(inBreak bool) {
 		manager.mu.Lock()
 		defer manager.mu.Unlock()
 		manager.inBreak = inBreak
+		manager.forceNextItem.Disabled = inBreak
 		manager.skipItem.Disabled = !inBreak
 		manager.refreshMenuLocked()
 	})
 }
 
 func (manager *Manager) refreshLocalizationLocked() {
+	manager.forceNextItem.Label = manager.localizer.T("tray.takeNextBreakNow")
 	manager.preferencesItem.Label = manager.localizer.T("tray.preferences")
 	manager.pauseForItem.Label = manager.localizer.T("tray.disableBreaksFor")
 	manager.pause5Item.Label = manager.localizer.T("tray.pauseForMinutes", 5)
@@ -188,6 +203,9 @@ func (manager *Manager) refreshStatusLocked() {
 		status = fmt.Sprintf("%s %s", status, manager.localizer.T("tray.pausedSuffix"))
 	}
 	manager.statusItem.Label = manager.localizer.T("tray.statusFormat", status)
+	if manager.tooltipEnabled {
+		systray.SetTooltip(manager.statusItem.Label)
+	}
 }
 
 func (manager *Manager) refreshMenuLocked() {
@@ -197,6 +215,7 @@ func (manager *Manager) refreshMenuLocked() {
 	manager.app.SetSystemTrayMenu(fyne.NewMenu(
 		manager.localizer.T("tray.menuTitle"),
 		manager.statusItem,
+		manager.forceNextItem,
 		manager.preferencesItem,
 		manager.pauseForItem,
 		manager.forceLongItem,

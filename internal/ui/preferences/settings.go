@@ -6,6 +6,8 @@ import (
 	"eagleeye/internal/core/model"
 )
 
+const idleCheckInterval = 20 * time.Second
+
 // Settings defines editable user preferences.
 type Settings struct {
 	ShortInterval time.Duration
@@ -55,6 +57,6 @@ func (settings Settings) TimeKeeperConfig() model.TimeKeeperConfig {
 		},
 		IdleResetEnabled:  settings.IdleEnabled,
 		IdleResetAfter:    5 * time.Minute,
-		IdleCheckInterval: 5 * time.Second,
+		IdleCheckInterval: idleCheckInterval,
 	}
 }

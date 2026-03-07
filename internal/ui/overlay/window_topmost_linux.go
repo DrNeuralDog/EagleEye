@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"sync"
 
+	"eagleeye/internal/platform"
+
 	"fyne.io/fyne/v2/driver"
 )
 
@@ -44,8 +46,8 @@ func (overlay *Window) applyNativeTopmost(enable bool) {
 
 func lookupWmctrl() (string, bool) {
 	wmctrlLookupOnce.Do(func() {
-		path, err := exec.LookPath("wmctrl")
-		if err != nil {
+		path, ok := platform.FindSystemExecutable("wmctrl")
+		if !ok {
 			return
 		}
 		wmctrlPath = path
@@ -57,6 +59,8 @@ func lookupWmctrl() (string, bool) {
 }
 
 func (overlay *Window) forceForeground() {}
+
+func (overlay *Window) keepTopmost() {}
 
 func (overlay *Window) releaseClipCursor() {}
 

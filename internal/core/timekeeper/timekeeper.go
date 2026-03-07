@@ -204,6 +204,22 @@ func (keeper *TimeKeeper) ForceBreak(state State) {
 	keeper.mu.Unlock()
 }
 
+// ForceNextBreak triggers whichever break would normally happen next.
+func (keeper *TimeKeeper) ForceNextBreak() {
+	keeper.mu.Lock()
+	if !keeper.running || keeper.paused || keeper.state != StateWork {
+		keeper.mu.Unlock()
+		return
+	}
+	state, ok := keeper.nextBreakStateLocked()
+	if !ok {
+		keeper.mu.Unlock()
+		return
+	}
+	keeper.enterBreakLocked(state)
+	keeper.mu.Unlock()
+}
+
 // ResetForIdle forces the timer to restart work intervals.
 func (keeper *TimeKeeper) ResetForIdle() {
 	keeper.mu.Lock()
@@ -303,12 +319,12 @@ func (keeper *TimeKeeper) advanceBreakLocked(delta time.Duration, now time.Time)
 	keeper.remaining -= delta
 	if keeper.remaining > 0 {
 		keeper.emitLocked(Event{
-			Type:      EventProgress,
-			State:     keeper.state,
-			Remaining: keeper.remaining,
-			Progress:  keeper.breakProgressLocked(),
+			Type:       EventProgress,
+			State:      keeper.state,
+			Remaining:  keeper.remaining,
+			Progress:   keeper.breakProgressLocked(),
 			StrictMode: keeper.config.Long.StrictMode,
-			At: now,
+			At:         now,
 		})
 		return
 	}
@@ -383,13 +399,28 @@ func (keeper *TimeKeeper) maybeEmitProgressLocked(now time.Time) {
 }
 
 func (keeper *TimeKeeper) nextBreakRemainingLocked() time.Duration {
-	if keeper.config.Long.Enabled && keeper.nextLong < keeper.nextShort {
+	state, ok := keeper.nextBreakStateLocked()
+	if !ok {
+		return 0
+	}
+	switch state {
+	case StateLongBreak:
 		return keeper.nextLong
+	case StateShortBreak:
+		return keeper.nextShort
+	default:
+		return 0
+	}
+}
+
+func (keeper *TimeKeeper) nextBreakStateLocked() (State, bool) {
+	if keeper.config.Long.Enabled && (!keeper.config.Short.Enabled || keeper.nextLong < keeper.nextShort) {
+		return StateLongBreak, true
 	}
 	if keeper.config.Short.Enabled {
-		return keeper.nextShort
+		return StateShortBreak, true
 	}
-	return 0
+	return "", false
 }
 
 func (keeper *TimeKeeper) workProgressLocked() float64 {

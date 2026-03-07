@@ -8,5 +8,6 @@ func (overlay *Window) applyNativeTopmost(enable bool) {
 
 func (overlay *Window) forceForeground() {}
 
-func (overlay *Window) releaseClipCursor() {}
+func (overlay *Window) keepTopmost() {}
 
+func (overlay *Window) releaseClipCursor() {}

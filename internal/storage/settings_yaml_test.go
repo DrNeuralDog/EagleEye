@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -34,6 +35,71 @@ func TestSaveLoadRunOnStartup(t *testing.T) {
 				t.Fatalf("loaded RunOnStartup = %t, want %t", loaded.RunOnStartup, expected)
 			}
 		})
+	}
+}
+
+func TestSaveSettingsUsesPrivateFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows ACLs are not represented reliably through os.FileMode permission bits")
+	}
+
+	configRoot := t.TempDir()
+	setUserConfigEnv(t, configRoot)
+
+	appName := "EagleEyePrivateMode"
+	if err := SaveSettings(appName, preferences.DefaultSettings()); err != nil {
+		t.Fatalf("SaveSettings() error = %v", err)
+	}
+
+	configPath, err := resolveConfigPath(appName)
+	if err != nil {
+		t.Fatalf("resolveConfigPath() error = %v", err)
+	}
+	info, err := os.Stat(configPath)
+	if err != nil {
+		t.Fatalf("Stat() error = %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("settings mode = %o, want 0600", info.Mode().Perm())
+	}
+}
+
+func TestLoadSettingsRejectsOversizedFile(t *testing.T) {
+	configRoot := t.TempDir()
+	setUserConfigEnv(t, configRoot)
+
+	appName := "EagleEyeOversized"
+	configPath, err := resolveConfigPath(appName)
+	if err != nil {
+		t.Fatalf("resolveConfigPath() error = %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	oversized := bytes.Repeat([]byte("a"), maxSettingsFileSize+1)
+	if err := os.WriteFile(configPath, oversized, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	if _, err := LoadSettings(appName); err == nil {
+		t.Fatalf("LoadSettings() error = nil, want oversized file error")
+	} else if !strings.Contains(err.Error(), "settings file exceeds") {
+		t.Fatalf("LoadSettings() error = %v, want oversized file error", err)
+	}
+}
+
+func TestResolveLogPathUsesAppConfigDir(t *testing.T) {
+	configRoot := t.TempDir()
+	setUserConfigEnv(t, configRoot)
+
+	logPath, err := ResolveLogPath("EagleEyeLogPath")
+	if err != nil {
+		t.Fatalf("ResolveLogPath() error = %v", err)
+	}
+
+	wantSuffix := filepath.Join("EagleEyeLogPath", logFileName)
+	if !strings.HasSuffix(logPath, wantSuffix) {
+		t.Fatalf("ResolveLogPath() = %q, want suffix %q", logPath, wantSuffix)
 	}
 }
 

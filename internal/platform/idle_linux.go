@@ -18,8 +18,8 @@ type idleProvider struct {
 type unsupportedIdleProvider struct{}
 
 func newIdleProvider() IdleProvider {
-	path, err := exec.LookPath("xprintidle")
-	if err != nil {
+	path, ok := findAllowedExecutable("xprintidle", linuxExecutableSearchDirs)
+	if !ok {
 		return unsupportedIdleProvider{}
 	}
 	return &idleProvider{xprintidlePath: path}

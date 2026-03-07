@@ -39,9 +39,18 @@ func newJSONLogger(filename string) *jsonLogger {
 	if filename == "" {
 		return nil
 	}
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
+		log.Printf("create log directory: %v", err)
+		return nil
+	}
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		log.Printf("open log file: %v", err)
+		return nil
+	}
+	if err := file.Chmod(0o600); err != nil {
+		log.Printf("secure log file permissions: %v", err)
+		_ = file.Close()
 		return nil
 	}
 	return &jsonLogger{
@@ -95,8 +104,10 @@ func main() {
 		log.Printf("resolve executable: %v", err)
 	}
 	logPath := ""
-	if exePath != "" {
-		logPath = filepath.Join(filepath.Dir(exePath), "EagleEye.log.jsonl")
+	if resolvedLogPath, err := storage.ResolveLogPath(appName); err != nil {
+		log.Printf("resolve log path: %v", err)
+	} else {
+		logPath = resolvedLogPath
 	}
 	jsonLog := newJSONLogger(logPath)
 	defer jsonLog.Close()
@@ -212,6 +223,7 @@ func main() {
 		desktopApp.SetSystemTrayIcon(activeIcon)
 		if trayManager != nil {
 			trayManager.SetPaused(false)
+			trayManager.SetStatus(localizer.T("tray.nextBreakIn", formatRemaining(nextBreakRemaining)))
 		}
 		if prefsWindow != nil {
 			prefsWindow.SetTimerControlState(true)
@@ -318,6 +330,22 @@ func main() {
 			} else {
 				setPauseState(true)
 			}
+		},
+		OnForceNext: func() {
+			if !serviceStarted {
+				startServiceIfNeeded()
+			}
+			if pauseTimer != nil {
+				pauseTimer.Stop()
+				pauseTimer = nil
+			}
+			if isPaused {
+				setPauseState(false)
+			}
+			jsonLog.Log("break_force_next", map[string]any{
+				"remaining": nextBreakRemaining.String(),
+			})
+			keeper.ForceNextBreak()
 		},
 		OnSkipBreak: func() {
 			keeper.SkipBreak()

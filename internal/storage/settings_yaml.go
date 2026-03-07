@@ -13,6 +13,8 @@ import (
 )
 
 const settingsFileName = "settings.yaml"
+const logFileName = "EagleEye.log.jsonl"
+const maxSettingsFileSize = 256 * 1024
 
 type yamlSettings struct {
 	ShortIntervalMinutes int     `yaml:"short_interval_minutes"`
@@ -34,6 +36,17 @@ func LoadSettings(appName string) (preferences.Settings, error) {
 	configPath, err := resolveConfigPath(appName)
 	if err != nil {
 		return settings, err
+	}
+
+	stat, err := os.Stat(configPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return settings, nil
+		}
+		return settings, fmt.Errorf("stat settings file: %w", err)
+	}
+	if stat.Size() > maxSettingsFileSize {
+		return settings, fmt.Errorf("settings file exceeds %d bytes", maxSettingsFileSize)
 	}
 
 	rawData, err := os.ReadFile(configPath)
@@ -70,7 +83,7 @@ func SaveSettings(appName string, settings preferences.Settings) error {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
 	}
 
@@ -92,19 +105,39 @@ func SaveSettings(appName string, settings preferences.Settings) error {
 		return fmt.Errorf("marshal settings yaml: %w", err)
 	}
 
-	if err := os.WriteFile(configPath, serialized, 0o644); err != nil {
+	if err := os.WriteFile(configPath, serialized, 0o600); err != nil {
 		return fmt.Errorf("write settings file: %w", err)
+	}
+	if err := os.Chmod(configPath, 0o600); err != nil {
+		return fmt.Errorf("secure settings file permissions: %w", err)
 	}
 
 	return nil
 }
 
+// ResolveLogPath returns the per-user JSONL log path for the application.
+func ResolveLogPath(appName string) (string, error) {
+	configDir, err := resolveAppConfigDir(appName)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(configDir, logFileName), nil
+}
+
 func resolveConfigPath(appName string) (string, error) {
+	configDir, err := resolveAppConfigDir(appName)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(configDir, settingsFileName), nil
+}
+
+func resolveAppConfigDir(appName string) (string, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve user config dir: %w", err)
 	}
-	return filepath.Join(configDir, appName, settingsFileName), nil
+	return filepath.Join(configDir, appName), nil
 }
 
 func applyYamlSettings(settings *preferences.Settings, fileData yamlSettings) {

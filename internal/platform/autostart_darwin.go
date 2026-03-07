@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 )
 
 func (service *platformService) EnableAutostart(appName, execPath string) error {
@@ -23,15 +24,24 @@ func (service *platformService) EnableAutostart(appName, execPath string) error 
 	}
 
 	launchAgentsDir := filepath.Join(homeDir, "Library", "LaunchAgents")
-	if err := os.MkdirAll(launchAgentsDir, 0o755); err != nil {
+	if err := os.MkdirAll(launchAgentsDir, 0o700); err != nil {
 		return fmt.Errorf("enable autostart: create LaunchAgents dir: %w", err)
+	}
+	if err := os.Chmod(launchAgentsDir, 0o700); err != nil {
+		return fmt.Errorf("enable autostart: secure LaunchAgents dir permissions: %w", err)
 	}
 
 	label := launchAgentLabel(appName)
 	plistPath := filepath.Join(launchAgentsDir, label+".plist")
-	content := buildLaunchAgentPlist(label, execPath)
-	if err := os.WriteFile(plistPath, []byte(content), 0o644); err != nil {
+	content, err := buildLaunchAgentPlist(label, execPath)
+	if err != nil {
+		return fmt.Errorf("enable autostart: build plist: %w", err)
+	}
+	if err := os.WriteFile(plistPath, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("enable autostart: write plist: %w", err)
+	}
+	if err := os.Chmod(plistPath, 0o600); err != nil {
+		return fmt.Errorf("enable autostart: secure plist permissions: %w", err)
 	}
 
 	return nil
@@ -70,7 +80,13 @@ func launchAgentLabel(appName string) string {
 	return "com.eagleeye." + name
 }
 
-func buildLaunchAgentPlist(label, execPath string) string {
+func buildLaunchAgentPlist(label, execPath string) (string, error) {
+	if err := validateLaunchAgentValue("label", label); err != nil {
+		return "", err
+	}
+	if err := validateLaunchAgentValue("exec path", execPath); err != nil {
+		return "", err
+	}
 	escapedPath := xmlEscape(execPath)
 	escapedLabel := xmlEscape(label)
 
@@ -92,7 +108,19 @@ func buildLaunchAgentPlist(label, execPath string) string {
 `,
 		escapedLabel,
 		escapedPath,
-	)
+	), nil
+}
+
+func validateLaunchAgentValue(field string, value string) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("%s is empty", field)
+	}
+	for _, char := range value {
+		if unicode.IsControl(char) {
+			return fmt.Errorf("%s contains control character", field)
+		}
+	}
+	return nil
 }
 
 func xmlEscape(value string) string {

@@ -58,9 +58,9 @@ type Callbacks struct {
 
 // Window handles the preferences UI.
 type Window struct {
-	window    fyne.Window
-	settings  Settings
-	callbacks    Callbacks
+	window      fyne.Window
+	settings    Settings
+	callbacks   Callbacks
 	uiLocalizer *i18n.Localizer
 
 	labels             map[string]*widget.Label
@@ -86,8 +86,8 @@ type Window struct {
 	statusBarTimer     *canvas.Text
 	timerToggleButton  *widget.Button
 
-	scheduleSection      *fyne.Container
-	scheduleLayoutLang   string
+	scheduleSection    *fyne.Container
+	scheduleLayoutLang string
 
 	currentServiceState serviceState
 	runningTimerText    string
@@ -116,6 +116,11 @@ func New(app fyne.App, settings Settings, callbacks Callbacks) *Window {
 
 	idleCheck := widget.NewCheck("", nil)
 	idleCheck.SetChecked(settings.IdleEnabled)
+	idleTrackingRow := newDelayedHoverInfoRow(idleCheck, window.Canvas(), func() string {
+		return uiLocalizer.T("prefs.idleTrackingHelp")
+	}, func() {
+		idleCheck.SetChecked(!idleCheck.Checked)
+	})
 
 	opacity := widget.NewSlider(0.7, 0.95)
 	opacity.Value = settings.OverlayOpacity
@@ -186,7 +191,7 @@ func New(app fyne.App, settings Settings, callbacks Callbacks) *Window {
 		scheduleSection,
 		newVerticalSpacer(strictModeTopSpacerHeight),
 		strict,
-		idleCheck,
+		idleTrackingRow,
 		fullscreen,
 		runOnStartup,
 		newVerticalSpacer(preferencesMidFormGap),
