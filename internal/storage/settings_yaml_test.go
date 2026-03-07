@@ -38,6 +38,66 @@ func TestSaveLoadRunOnStartup(t *testing.T) {
 	}
 }
 
+func TestSaveLoadBreakTimerStarted(t *testing.T) {
+	configRoot := t.TempDir()
+	setUserConfigEnv(t, configRoot)
+
+	settings := preferences.DefaultSettings()
+	settings.BreakTimerStarted = true
+
+	if err := SaveSettings("EagleEyeBreakTimerStarted", settings); err != nil {
+		t.Fatalf("SaveSettings() error = %v", err)
+	}
+
+	loaded, err := LoadSettings("EagleEyeBreakTimerStarted")
+	if err != nil {
+		t.Fatalf("LoadSettings() error = %v", err)
+	}
+
+	if !loaded.BreakTimerStarted {
+		t.Fatalf("loaded BreakTimerStarted = false, want true")
+	}
+}
+
+func TestLoadSettingsWithoutBreakTimerStartedKeepsFalse(t *testing.T) {
+	configRoot := t.TempDir()
+	setUserConfigEnv(t, configRoot)
+
+	appName := "EagleEyeMissingBreakTimerStarted"
+	configPath, err := resolveConfigPath(appName)
+	if err != nil {
+		t.Fatalf("resolveConfigPath() error = %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	raw := []byte(strings.Join([]string{
+		"short_interval_minutes: 15",
+		"short_duration_seconds: 15",
+		"long_interval_minutes: 50",
+		"long_duration_minutes: 5",
+		"strict_mode: false",
+		"idle_enabled: true",
+		"overlay_opacity: 0.85",
+		"fullscreen: false",
+		"run_on_startup: true",
+		"language: en",
+		"",
+	}, "\n"))
+	if err := os.WriteFile(configPath, raw, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	loaded, err := LoadSettings(appName)
+	if err != nil {
+		t.Fatalf("LoadSettings() error = %v", err)
+	}
+
+	if loaded.BreakTimerStarted {
+		t.Fatalf("loaded BreakTimerStarted = true, want false")
+	}
+}
+
 func TestSaveSettingsUsesPrivateFileMode(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows ACLs are not represented reliably through os.FileMode permission bits")

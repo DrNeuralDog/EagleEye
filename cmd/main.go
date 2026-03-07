@@ -85,11 +85,14 @@ func (logger *jsonLogger) Log(event string, fields map[string]any) {
 }
 
 func main() {
+	autostartLaunch := isAutostartLaunch(os.Args[1:])
 	guard, err := platform.AcquireSingleInstance(appName)
 	if err != nil {
 		if errors.Is(err, platform.ErrAlreadyRunning) {
-			if notifyErr := platform.NotifyRunningInstance(appName); notifyErr != nil {
-				log.Printf("notify running instance: %v", notifyErr)
+			if !autostartLaunch {
+				if notifyErr := platform.NotifyRunningInstance(appName); notifyErr != nil {
+					log.Printf("notify running instance: %v", notifyErr)
+				}
 			}
 		}
 		log.Printf("single instance: %v", err)
@@ -217,6 +220,12 @@ func main() {
 		if serviceStarted {
 			return
 		}
+		if !settings.BreakTimerStarted {
+			settings.BreakTimerStarted = true
+			if err := storage.SaveSettings(appName, settings); err != nil {
+				log.Printf("save timer start state: %v", err)
+			}
+		}
 		keeper.Start()
 		serviceStarted = true
 		isPaused = false
@@ -265,6 +274,7 @@ func main() {
 	prefsWindow = preferences.New(fyneApp, settings, preferences.Callbacks{
 		OnSave: func(updated preferences.Settings) {
 			previousSettings := settings
+			updated.BreakTimerStarted = settings.BreakTimerStarted || updated.BreakTimerStarted
 			languageChanged := i18n.NormalizeLanguage(previousSettings.Language) != i18n.NormalizeLanguage(updated.Language)
 			autostartChanged := previousSettings.RunOnStartup != updated.RunOnStartup
 			if autostartChanged {
@@ -425,7 +435,11 @@ func main() {
 		}
 	}()
 
-	prefsWindow.Show()
+	if shouldStartTimerOnLaunch(settings, autostartLaunch) {
+		startServiceIfNeeded()
+	} else {
+		prefsWindow.Show()
+	}
 	fyneApp.Run()
 }
 
@@ -538,4 +552,17 @@ func opacityToAlpha(opacity float64) uint8 {
 		opacity = 1
 	}
 	return uint8(opacity * 255)
+}
+
+func isAutostartLaunch(args []string) bool {
+	for _, arg := range args {
+		if arg == platform.AutostartArg {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldStartTimerOnLaunch(settings preferences.Settings, autostartLaunch bool) bool {
+	return autostartLaunch && settings.RunOnStartup && settings.BreakTimerStarted
 }

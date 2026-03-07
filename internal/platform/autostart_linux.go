@@ -95,8 +95,12 @@ X-GNOME-Autostart-enabled=true
 Terminal=false
 `,
 		escapeDesktopString(appName),
-		quoteDesktopExecArg(execPath),
+		buildDesktopExec(execPath),
 	), nil
+}
+
+func buildDesktopExec(execPath string) string {
+	return quoteDesktopExecArg(execPath) + " " + AutostartArg
 }
 
 func validateDesktopEntryValue(field string, value string) error {

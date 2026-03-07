@@ -89,6 +89,7 @@ func buildLaunchAgentPlist(label, execPath string) (string, error) {
 	}
 	escapedPath := xmlEscape(execPath)
 	escapedLabel := xmlEscape(label)
+	escapedAutostartArg := xmlEscape(AutostartArg)
 
 	return fmt.Sprintf(
 		`<?xml version="1.0" encoding="UTF-8"?>
@@ -100,6 +101,7 @@ func buildLaunchAgentPlist(label, execPath string) (string, error) {
 	<key>ProgramArguments</key>
 	<array>
 		<string>%s</string>
+		<string>%s</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
@@ -108,6 +110,7 @@ func buildLaunchAgentPlist(label, execPath string) (string, error) {
 `,
 		escapedLabel,
 		escapedPath,
+		escapedAutostartArg,
 	), nil
 }
 

@@ -28,3 +28,11 @@ func TestQuoteWindowsPathDoesNotTrimInput(t *testing.T) {
 		t.Fatalf("quoteWindowsPath() = %q, want %q", got, want)
 	}
 }
+
+func TestBuildWindowsAutostartCommandIncludesAutostartArg(t *testing.T) {
+	got := buildWindowsAutostartCommand(`C:\Program Files\EagleEye\EagleEye.exe`)
+	want := `"C:\Program Files\EagleEye\EagleEye.exe" --autostart`
+	if got != want {
+		t.Fatalf("buildWindowsAutostartCommand() = %q, want %q", got, want)
+	}
+}
