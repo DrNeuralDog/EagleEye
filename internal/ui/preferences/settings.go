@@ -17,19 +17,21 @@ type Settings struct {
 
 	OverlayOpacity float64
 	Fullscreen     bool
+	Language       string
 }
 
 // DefaultSettings returns default settings for EagleEye.
 func DefaultSettings() Settings {
 	return Settings{
-		ShortInterval: 15 * time.Minute,
-		ShortDuration: 15 * time.Second,
-		LongInterval:  50 * time.Minute,
-		LongDuration:  5 * time.Minute,
-		StrictMode:    false,
-		IdleEnabled:   true,
+		ShortInterval:  15 * time.Minute,
+		ShortDuration:  15 * time.Second,
+		LongInterval:   50 * time.Minute,
+		LongDuration:   5 * time.Minute,
+		StrictMode:     false,
+		IdleEnabled:    true,
 		OverlayOpacity: 0.85,
 		Fullscreen:     false,
+		Language:       "en",
 	}
 }
 

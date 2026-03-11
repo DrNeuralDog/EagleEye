@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"eagleeye/internal/ui/i18n"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
 )
@@ -21,83 +23,113 @@ type Callbacks struct {
 
 // Manager handles system tray state.
 type Manager struct {
-	mu          sync.Mutex
-	app         desktop.App
-	statusItem  *fyne.MenuItem
-	pauseItem   *fyne.MenuItem
-	skipItem    *fyne.MenuItem
-	pauseFor    *fyne.MenuItem
-	forceLong   *fyne.MenuItem
-	callbacks   Callbacks
+	mu sync.Mutex
+
+	app       desktop.App
+	callbacks Callbacks
+	localizer *i18n.Localizer
+
+	statusItem      *fyne.MenuItem
+	preferencesItem *fyne.MenuItem
+	pauseItem       *fyne.MenuItem
+	skipItem        *fyne.MenuItem
+	pauseForItem    *fyne.MenuItem
+	pause5Item      *fyne.MenuItem
+	pause15Item     *fyne.MenuItem
+	pause30Item     *fyne.MenuItem
+	pause60Item     *fyne.MenuItem
+	forceLongItem   *fyne.MenuItem
+	quitItem        *fyne.MenuItem
+
 	paused      bool
 	inBreak     bool
 	statusLabel string
 }
 
 // New creates a tray manager with the provided callbacks.
-func New(app desktop.App, callbacks Callbacks) *Manager {
+func New(app desktop.App, callbacks Callbacks, localizer *i18n.Localizer) *Manager {
+	if localizer == nil {
+		localizer = i18n.New(i18n.LanguageEN)
+	}
+
 	manager := &Manager{
 		app:       app,
 		callbacks: callbacks,
+		localizer: localizer,
 	}
 
-	manager.statusItem = fyne.NewMenuItem("Status: starting...", nil)
+	manager.statusItem = fyne.NewMenuItem("", nil)
 	manager.statusItem.Disabled = true
 
-	preferences := fyne.NewMenuItem("Preferences", func() {
+	manager.preferencesItem = fyne.NewMenuItem("", func() {
 		if manager.callbacks.OnPreferences != nil {
 			manager.callbacks.OnPreferences()
 		}
 	})
 
-	manager.pauseFor = fyne.NewMenuItem("Disable breaks for...", nil)
-	manager.pauseFor.ChildMenu = fyne.NewMenu("", fyne.NewMenuItem("5 minutes", func() {
+	manager.pause5Item = fyne.NewMenuItem("", func() {
 		if manager.callbacks.OnPauseFor != nil {
 			manager.callbacks.OnPauseFor(5 * time.Minute)
 		}
-	}), fyne.NewMenuItem("15 minutes", func() {
+	})
+	manager.pause15Item = fyne.NewMenuItem("", func() {
 		if manager.callbacks.OnPauseFor != nil {
 			manager.callbacks.OnPauseFor(15 * time.Minute)
 		}
-	}), fyne.NewMenuItem("30 minutes", func() {
+	})
+	manager.pause30Item = fyne.NewMenuItem("", func() {
 		if manager.callbacks.OnPauseFor != nil {
 			manager.callbacks.OnPauseFor(30 * time.Minute)
 		}
-	}), fyne.NewMenuItem("60 minutes", func() {
+	})
+	manager.pause60Item = fyne.NewMenuItem("", func() {
 		if manager.callbacks.OnPauseFor != nil {
 			manager.callbacks.OnPauseFor(60 * time.Minute)
 		}
-	}))
+	})
 
-	manager.forceLong = fyne.NewMenuItem("Take a long break now", func() {
+	manager.pauseForItem = fyne.NewMenuItem("", nil)
+	manager.pauseForItem.ChildMenu = fyne.NewMenu("", manager.pause5Item, manager.pause15Item, manager.pause30Item, manager.pause60Item)
+
+	manager.forceLongItem = fyne.NewMenuItem("", func() {
 		if manager.callbacks.OnForceLong != nil {
 			manager.callbacks.OnForceLong()
 		}
 	})
 
-	manager.pauseItem = fyne.NewMenuItem("Pause", func() {
+	manager.pauseItem = fyne.NewMenuItem("", func() {
 		if manager.callbacks.OnTogglePause != nil {
 			manager.callbacks.OnTogglePause()
 		}
 	})
 
-	manager.skipItem = fyne.NewMenuItem("Skip break", func() {
+	manager.skipItem = fyne.NewMenuItem("", func() {
 		if manager.callbacks.OnSkipBreak != nil {
 			manager.callbacks.OnSkipBreak()
 		}
 	})
 	manager.skipItem.Disabled = true
 
-	quit := fyne.NewMenuItem("Quit", func() {
+	manager.quitItem = fyne.NewMenuItem("", func() {
 		if manager.callbacks.OnQuit != nil {
 			manager.callbacks.OnQuit()
 		}
 	})
 
-	menu := fyne.NewMenu("EagleEye", manager.statusItem, preferences, manager.pauseFor, manager.forceLong, manager.pauseItem, manager.skipItem, quit)
-	app.SetSystemTrayMenu(menu)
-
+	manager.statusLabel = manager.localizer.T("tray.statusStarting")
+	manager.refreshLocalizationLocked()
+	manager.refreshMenuLocked()
 	return manager
+}
+
+// RefreshLocalization updates tray texts after language changes.
+func (manager *Manager) RefreshLocalization() {
+	fyne.Do(func() {
+		manager.mu.Lock()
+		defer manager.mu.Unlock()
+		manager.refreshLocalizationLocked()
+		manager.refreshMenuLocked()
+	})
 }
 
 // SetStatus updates the status label.
@@ -116,11 +148,7 @@ func (manager *Manager) SetPaused(paused bool) {
 		manager.mu.Lock()
 		defer manager.mu.Unlock()
 		manager.paused = paused
-		if paused {
-			manager.pauseItem.Label = "Resume"
-		} else {
-			manager.pauseItem.Label = "Pause"
-		}
+		manager.refreshLocalizationLocked()
 		manager.refreshStatusLocked()
 	})
 }
@@ -136,33 +164,44 @@ func (manager *Manager) SetInBreak(inBreak bool) {
 	})
 }
 
+func (manager *Manager) refreshLocalizationLocked() {
+	manager.preferencesItem.Label = manager.localizer.T("tray.preferences")
+	manager.pauseForItem.Label = manager.localizer.T("tray.disableBreaksFor")
+	manager.pause5Item.Label = manager.localizer.T("tray.pauseForMinutes", 5)
+	manager.pause15Item.Label = manager.localizer.T("tray.pauseForMinutes", 15)
+	manager.pause30Item.Label = manager.localizer.T("tray.pauseForMinutes", 30)
+	manager.pause60Item.Label = manager.localizer.T("tray.pauseForMinutes", 60)
+	manager.forceLongItem.Label = manager.localizer.T("tray.takeLongBreakNow")
+	if manager.paused {
+		manager.pauseItem.Label = manager.localizer.T("tray.resume")
+	} else {
+		manager.pauseItem.Label = manager.localizer.T("tray.pause")
+	}
+	manager.skipItem.Label = manager.localizer.T("tray.skipBreak")
+	manager.quitItem.Label = manager.localizer.T("tray.quit")
+	manager.refreshStatusLocked()
+}
+
 func (manager *Manager) refreshStatusLocked() {
 	status := manager.statusLabel
 	if manager.paused {
-		status = fmt.Sprintf("%s (paused)", status)
+		status = fmt.Sprintf("%s %s", status, manager.localizer.T("tray.pausedSuffix"))
 	}
-	manager.statusItem.Label = fmt.Sprintf("Status: %s", status)
-	manager.refreshMenuLocked()
+	manager.statusItem.Label = manager.localizer.T("tray.statusFormat", status)
 }
 
 func (manager *Manager) refreshMenuLocked() {
-	if manager.app != nil {
-		manager.app.SetSystemTrayMenu(fyne.NewMenu("EagleEye",
-			manager.statusItem,
-			fyne.NewMenuItem("Preferences", func() {
-				if manager.callbacks.OnPreferences != nil {
-					manager.callbacks.OnPreferences()
-				}
-			}),
-			manager.pauseFor,
-			manager.forceLong,
-			manager.pauseItem,
-			manager.skipItem,
-			fyne.NewMenuItem("Quit", func() {
-				if manager.callbacks.OnQuit != nil {
-					manager.callbacks.OnQuit()
-				}
-			}),
-		))
+	if manager.app == nil {
+		return
 	}
+	manager.app.SetSystemTrayMenu(fyne.NewMenu(
+		manager.localizer.T("tray.menuTitle"),
+		manager.statusItem,
+		manager.preferencesItem,
+		manager.pauseForItem,
+		manager.forceLongItem,
+		manager.pauseItem,
+		manager.skipItem,
+		manager.quitItem,
+	))
 }

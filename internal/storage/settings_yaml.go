@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"eagleeye/internal/ui/i18n"
 	"eagleeye/internal/ui/preferences"
 	"gopkg.in/yaml.v3"
 )
@@ -22,6 +23,7 @@ type yamlSettings struct {
 	IdleEnabled          bool    `yaml:"idle_enabled"`
 	OverlayOpacity       float64 `yaml:"overlay_opacity"`
 	Fullscreen           bool    `yaml:"fullscreen"`
+	Language             string  `yaml:"language"`
 }
 
 // LoadSettings reads user preferences from YAML.
@@ -70,6 +72,7 @@ func SaveSettings(appName string, settings preferences.Settings) error {
 		IdleEnabled:          settings.IdleEnabled,
 		OverlayOpacity:       settings.OverlayOpacity,
 		Fullscreen:           settings.Fullscreen,
+		Language:             i18n.NormalizeLanguage(settings.Language),
 	}
 
 	serialized, err := yaml.Marshal(fileData)
@@ -113,4 +116,5 @@ func applyYamlSettings(settings *preferences.Settings, fileData yamlSettings) {
 	settings.StrictMode = fileData.StrictMode
 	settings.IdleEnabled = fileData.IdleEnabled
 	settings.Fullscreen = fileData.Fullscreen
+	settings.Language = i18n.NormalizeLanguage(fileData.Language)
 }
