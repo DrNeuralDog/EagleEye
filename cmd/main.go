@@ -22,6 +22,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 )
@@ -99,6 +100,16 @@ func main() {
 	}
 	jsonLog := newJSONLogger(logPath)
 	defer jsonLog.Close()
+	platformService := platform.NewService()
+	applyAutostart := func(enabled bool) error {
+		if enabled {
+			if exePath == "" {
+				return fmt.Errorf("apply autostart: executable path is empty")
+			}
+			return platformService.EnableAutostart(appName, exePath)
+		}
+		return platformService.DisableAutostart(appName)
+	}
 
 	fyneApp := app.NewWithID("com.eagleeye.app")
 	fyneApp.SetIcon(resources.MustLogo("Logo_Optimal_Gradient.png"))
@@ -124,6 +135,9 @@ func main() {
 	if err != nil {
 		log.Printf("load settings: %v", err)
 		settings = preferences.DefaultSettings()
+	}
+	if err := applyAutostart(settings.RunOnStartup); err != nil {
+		log.Printf("apply autostart on startup: %v", err)
 	}
 	localizer := i18n.New(settings.Language)
 	settings.Language = localizer.Language()
@@ -238,7 +252,19 @@ func main() {
 
 	prefsWindow = preferences.New(fyneApp, settings, preferences.Callbacks{
 		OnSave: func(updated preferences.Settings) {
-			languageChanged := i18n.NormalizeLanguage(settings.Language) != i18n.NormalizeLanguage(updated.Language)
+			previousSettings := settings
+			languageChanged := i18n.NormalizeLanguage(previousSettings.Language) != i18n.NormalizeLanguage(updated.Language)
+			autostartChanged := previousSettings.RunOnStartup != updated.RunOnStartup
+			if autostartChanged {
+				if err := applyAutostart(updated.RunOnStartup); err != nil {
+					title := localizer.T("prefs.autostartApplyErrorTitle")
+					body := localizer.T("prefs.autostartApplyErrorBody", err)
+					log.Printf("%s: %v", title, err)
+					dialog.ShowError(fmt.Errorf("%s: %s", title, body), prefsWindow.Window())
+					prefsWindow.UpdateSettings(previousSettings)
+					return
+				}
+			}
 			settings = updated
 			settings.Language = i18n.NormalizeLanguage(settings.Language)
 			if err := storage.SaveSettings(appName, settings); err != nil {
@@ -271,7 +297,7 @@ func main() {
 				setPauseState(true)
 			}
 		},
-	}, localizer)
+	})
 	prefsWindow.SetServiceNotStarted()
 	guard.ListenForActivation(func() {
 		fyne.Do(func() {

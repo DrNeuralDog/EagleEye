@@ -23,6 +23,7 @@ type yamlSettings struct {
 	IdleEnabled          bool    `yaml:"idle_enabled"`
 	OverlayOpacity       float64 `yaml:"overlay_opacity"`
 	Fullscreen           bool    `yaml:"fullscreen"`
+	RunOnStartup         *bool   `yaml:"run_on_startup"`
 	Language             string  `yaml:"language"`
 }
 
@@ -46,6 +47,16 @@ func LoadSettings(appName string) (preferences.Settings, error) {
 	var fileData yamlSettings
 	if err := yaml.Unmarshal(rawData, &fileData); err != nil {
 		return settings, fmt.Errorf("parse settings yaml: %w", err)
+	}
+	if fileData.RunOnStartup == nil {
+		defaultSettings := preferences.DefaultSettings()
+		if err := os.Remove(configPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return defaultSettings, fmt.Errorf("reset legacy settings: remove old file: %w", err)
+		}
+		if err := SaveSettings(appName, defaultSettings); err != nil {
+			return defaultSettings, fmt.Errorf("reset legacy settings: save defaults: %w", err)
+		}
+		return defaultSettings, nil
 	}
 
 	applyYamlSettings(&settings, fileData)
@@ -72,6 +83,7 @@ func SaveSettings(appName string, settings preferences.Settings) error {
 		IdleEnabled:          settings.IdleEnabled,
 		OverlayOpacity:       settings.OverlayOpacity,
 		Fullscreen:           settings.Fullscreen,
+		RunOnStartup:         boolPointer(settings.RunOnStartup),
 		Language:             i18n.NormalizeLanguage(settings.Language),
 	}
 
@@ -116,5 +128,13 @@ func applyYamlSettings(settings *preferences.Settings, fileData yamlSettings) {
 	settings.StrictMode = fileData.StrictMode
 	settings.IdleEnabled = fileData.IdleEnabled
 	settings.Fullscreen = fileData.Fullscreen
+	if fileData.RunOnStartup != nil {
+		settings.RunOnStartup = *fileData.RunOnStartup
+	}
 	settings.Language = i18n.NormalizeLanguage(fileData.Language)
+}
+
+func boolPointer(value bool) *bool {
+	pointer := value
+	return &pointer
 }

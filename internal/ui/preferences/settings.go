@@ -17,6 +17,7 @@ type Settings struct {
 
 	OverlayOpacity float64
 	Fullscreen     bool
+	RunOnStartup   bool
 	Language       string
 }
 
@@ -31,6 +32,7 @@ func DefaultSettings() Settings {
 		IdleEnabled:    true,
 		OverlayOpacity: 0.85,
 		Fullscreen:     false,
+		RunOnStartup:   true,
 		Language:       "en",
 	}
 }

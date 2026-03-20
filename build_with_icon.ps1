@@ -15,6 +15,70 @@ function Invoke-NativeCommand {
     }
 }
 
+function Resolve-GoExecutable {
+    $candidates = @()
+
+    if (-not [string]::IsNullOrWhiteSpace($env:GOROOT)) {
+        $candidates += (Join-Path $env:GOROOT "bin\go.exe")
+    }
+
+    try {
+        $goCommand = Get-Command "go" -ErrorAction Stop
+        if ($goCommand -and -not [string]::IsNullOrWhiteSpace($goCommand.Source)) {
+            $candidates += $goCommand.Source
+        }
+    }
+    catch {
+        # no-op: fallback candidates below
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+        $candidates += (Join-Path $env:ProgramFiles "Go\bin\go.exe")
+    }
+
+    $uniqueCandidates = $candidates | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+    foreach ($candidate in $uniqueCandidates) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    throw "Go executable not found. Install Go 1.21+ or add 'go.exe' to PATH."
+}
+
+function Assert-GoMinimumVersion {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$GoExe,
+        [Parameter(Mandatory = $true)]
+        [int]$MinimumMinor
+    )
+
+    $goVersionStr = (& $GoExe env GOVERSION).Trim()
+    if ([string]::IsNullOrWhiteSpace($goVersionStr)) {
+        throw "Unable to read Go version from '$GoExe' (go env GOVERSION)."
+    }
+
+    if ($goVersionStr -match '^go(\d+)\.(\d+)') {
+        $major = [int]$Matches[1]
+        $minor = [int]$Matches[2]
+        if ($major -gt 1) {
+            return
+        }
+        if ($major -eq 1 -and $minor -ge $MinimumMinor) {
+            return
+        }
+        throw @"
+Go 1.$MinimumMinor+ required (go.mod). Found $goVersionStr from: $GoExe
+
+Install a current toolchain from https://go.dev/dl/
+If GOROOT points at an old install, update or remove GOROOT after installing.
+"@
+    }
+
+    throw "Unrecognized go version string: $goVersionStr"
+}
+
 function Convert-PngToIco {
     param(
         [Parameter(Mandatory = $true)]
@@ -81,10 +145,8 @@ $goBinPath = if ([string]::IsNullOrWhiteSpace($env:GOBIN)) { Join-Path $env:USER
 $rsrcExe = Join-Path $goBinPath "rsrc.exe"
 $tempIcoPath = Join-Path $env:TEMP "EagleEye_build_icon.ico"
 
-$goExe = Join-Path $env:ProgramFiles "Go\bin\go.exe"
-if (-not (Test-Path $goExe)) {
-    throw "Go not found at $goExe. Install Go 1.21+ and retry."
-}
+$goExe = Resolve-GoExecutable
+Assert-GoMinimumVersion -GoExe $goExe -MinimumMinor 21
 
 if (-not (Test-Path $rsrcExe)) {
     Invoke-NativeCommand -FilePath $goExe -Arguments @("install", "github.com/akavel/rsrc@latest")
