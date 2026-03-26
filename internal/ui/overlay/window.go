@@ -41,7 +41,10 @@ type Window struct {
 	titleLabel      *canvas.Text
 	subtitleLabel   *canvas.Text
 	exerciseLabel   *canvas.Text
-	background      *canvas.Rectangle
+	fullscreenBG    *canvas.Rectangle
+	cardBackground  *canvas.Rectangle
+	cardHost        *fyne.Container
+	cardHostLayout  *overlayCardHostLayout
 	engine          *animation.Engine
 	cancelCtx       context.CancelFunc
 	onSkip          func()
@@ -75,7 +78,8 @@ func New(app fyne.App, config Config, engine *animation.Engine, localizer *i18n.
 	}
 	window.SetPadded(false)
 
-	background := canvas.NewRectangle(overlayBackgroundColor(config.Opacity))
+	fullscreenBackground := canvas.NewRectangle(overlayBackgroundColor(config.Opacity))
+	cardBackground := canvas.NewRectangle(overlayBackgroundColor(config.Opacity))
 
 	image := canvas.NewImageFromResource(nil)
 	image.FillMode = canvas.ImageFillContain
@@ -104,7 +108,10 @@ func New(app fyne.App, config Config, engine *animation.Engine, localizer *i18n.
 	leftContent := container.New(&leftPanelLayout{}, titleLabel, subtitleLabel, exerciseLabel, timerLabel)
 	rightContent := container.New(&rightPanelLayout{}, image, skipButton)
 	content := container.NewGridWithColumns(2, leftContent, rightContent)
-	root := container.NewMax(background, content)
+	card := container.NewMax(cardBackground, content)
+	cardHostLayout := &overlayCardHostLayout{fullscreen: config.Fullscreen}
+	cardHost := container.New(cardHostLayout, card)
+	root := container.NewMax(fullscreenBackground, cardHost)
 
 	window.SetContent(root)
 	overlay := &Window{
@@ -118,7 +125,10 @@ func New(app fyne.App, config Config, engine *animation.Engine, localizer *i18n.
 		titleLabel:      titleLabel,
 		subtitleLabel:   subtitleLabel,
 		exerciseLabel:   exerciseLabel,
-		background:      background,
+		fullscreenBG:    fullscreenBackground,
+		cardBackground:  cardBackground,
+		cardHost:        cardHost,
+		cardHostLayout:  cardHostLayout,
 		engine:          engine,
 		localizer:       localizer,
 		currentExercise: animation.ExerciseLeftRight,
@@ -154,6 +164,7 @@ func (overlay *Window) Show(session Session, spec animation.ExerciseSpec) {
 	overlay.setStrictModeUnsafe(session.StrictMode)
 	overlay.applyWindowMode()
 	overlay.window.Show()
+	overlay.applyNativeTopmost(true)
 	overlay.applyNativeOpacity(overlay.config.Opacity)
 	overlay.window.RequestFocus()
 
@@ -173,6 +184,7 @@ func (overlay *Window) ShowIdle(remaining time.Duration, strict bool, idle anima
 	overlay.setStrictModeUnsafe(strict)
 	overlay.applyWindowMode()
 	overlay.window.Show()
+	overlay.applyNativeTopmost(true)
 	overlay.applyNativeOpacity(overlay.config.Opacity)
 	overlay.window.RequestFocus()
 
@@ -187,6 +199,7 @@ func (overlay *Window) Hide() {
 	if overlay.config.Fullscreen {
 		overlay.window.SetFullScreen(false)
 	}
+	overlay.applyNativeTopmost(false)
 	overlay.window.Hide()
 }
 
@@ -221,10 +234,13 @@ func (overlay *Window) SetOnSkip(handler func()) {
 func (overlay *Window) UpdateConfig(config Config) {
 	overlay.config = config
 	overlay.subtitleLabel.Text = config.Message
-	overlay.background.FillColor = overlayBackgroundColor(config.Opacity)
+	updatedColor := overlayBackgroundColor(config.Opacity)
+	overlay.fullscreenBG.FillColor = updatedColor
+	overlay.cardBackground.FillColor = updatedColor
 	overlay.applyNativeOpacity(config.Opacity)
 	overlay.applyWindowMode()
-	canvas.Refresh(overlay.background)
+	canvas.Refresh(overlay.fullscreenBG)
+	canvas.Refresh(overlay.cardBackground)
 	overlay.titleLabel.Refresh()
 	overlay.subtitleLabel.Refresh()
 	overlay.exerciseLabel.Refresh()
@@ -294,6 +310,12 @@ func (overlay *Window) stopEngine() {
 }
 
 func (overlay *Window) applyWindowMode() {
+	if overlay.cardHostLayout != nil {
+		overlay.cardHostLayout.SetFullscreen(overlay.config.Fullscreen)
+	}
+	if overlay.cardHost != nil {
+		overlay.cardHost.Refresh()
+	}
 	if overlay.config.Fullscreen {
 		overlay.window.SetFullScreen(true)
 		return
@@ -303,25 +325,45 @@ func (overlay *Window) applyWindowMode() {
 }
 
 func (overlay *Window) resizeToScreenFraction() {
+	screenSize := overlay.resolveScreenSize()
+	overlaySize := calculateOverlayCardSize(screenSize, overlay.window.Content().MinSize())
+	overlay.window.Resize(overlaySize)
+	overlay.window.CenterOnScreen()
+}
+
+func (overlay *Window) resolveScreenSize() fyne.Size {
 	screenSize := fyne.NewSize(defaultScreenWidth, defaultScreenHeight)
 	canvasSize := overlay.window.Canvas().Size()
 	// Canvas size can be reused as a proxy for monitor size when it is clearly screen-like.
 	if canvasSize.Width >= 1024 && canvasSize.Height >= 720 {
 		screenSize = canvasSize
 	}
+	return screenSize
+}
+
+func calculateOverlayCardSize(screenSize fyne.Size, minSize fyne.Size) fyne.Size {
+	if screenSize.Width <= 0 {
+		screenSize.Width = defaultScreenWidth
+	}
+	if screenSize.Height <= 0 {
+		screenSize.Height = defaultScreenHeight
+	}
 
 	width := screenSize.Width * overlayWidthFraction
 	height := screenSize.Height * overlayHeightFraction
-	minSize := overlay.window.Content().MinSize()
 	if width < minSize.Width {
 		width = minSize.Width
 	}
 	if height < minSize.Height {
 		height = minSize.Height
 	}
-
-	overlay.window.Resize(fyne.NewSize(width, height))
-	overlay.window.CenterOnScreen()
+	if width > screenSize.Width {
+		width = screenSize.Width
+	}
+	if height > screenSize.Height {
+		height = screenSize.Height
+	}
+	return fyne.NewSize(width, height)
 }
 
 func formatDuration(value time.Duration) string {
@@ -500,4 +542,43 @@ func (layout *leftPanelLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 	}
 	height := titleSize.Height + subtitleSize.Height + exerciseSize.Height + timerSize.Height + 40
 	return fyne.NewSize(width+20, height)
+}
+
+type overlayCardHostLayout struct {
+	fullscreen bool
+}
+
+func (layout *overlayCardHostLayout) SetFullscreen(fullscreen bool) {
+	layout.fullscreen = fullscreen
+}
+
+func (layout *overlayCardHostLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	if len(objects) == 0 {
+		return
+	}
+	card := objects[0]
+	if !layout.fullscreen {
+		card.Move(fyne.NewPos(0, 0))
+		card.Resize(size)
+		return
+	}
+
+	cardSize := calculateOverlayCardSize(size, card.MinSize())
+	x := (size.Width - cardSize.Width) / 2
+	if x < 0 {
+		x = 0
+	}
+	y := (size.Height - cardSize.Height) / 2
+	if y < 0 {
+		y = 0
+	}
+	card.Move(fyne.NewPos(x, y))
+	card.Resize(cardSize)
+}
+
+func (layout *overlayCardHostLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	if len(objects) == 0 {
+		return fyne.NewSize(0, 0)
+	}
+	return objects[0].MinSize()
 }
