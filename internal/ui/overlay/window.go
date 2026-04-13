@@ -138,6 +138,12 @@ func New(app fyne.App, config Config, engine *animation.Engine, localizer *i18n.
 	overlay.applyWindowMode()
 	overlay.applyNativeOpacity(config.Opacity)
 
+	window.SetCloseIntercept(func() {
+		if overlay.onSkip != nil {
+			overlay.onSkip()
+		}
+	})
+
 	return overlay
 }
 

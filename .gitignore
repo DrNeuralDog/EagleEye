@@ -364,3 +364,5 @@ docs/Examples/*.txt
 docs/WorkflowLogs/*.txt
 
 AGENTS.md
+.claude/
+repomix-output.xml
