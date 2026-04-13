@@ -56,6 +56,10 @@ func lookupWmctrl() (string, bool) {
 	return wmctrlPath, true
 }
 
+func (overlay *Window) forceForeground() {}
+
+func (overlay *Window) releaseClipCursor() {}
+
 func extractX11WindowID(context any) uintptr {
 	switch value := context.(type) {
 	case driver.X11WindowContext:

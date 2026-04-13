@@ -50,6 +50,8 @@ type Window struct {
 	onSkip          func()
 	localizer       *i18n.Localizer
 	currentExercise animation.ExerciseType
+	strictMode      bool
+	cachedHWND      uintptr
 }
 
 const (
@@ -173,6 +175,7 @@ func (overlay *Window) Show(session Session, spec animation.ExerciseSpec) {
 	overlay.applyNativeTopmost(true)
 	overlay.applyNativeOpacity(overlay.config.Opacity)
 	overlay.window.RequestFocus()
+	overlay.scheduleInitialFocus()
 
 	if overlay.engine != nil {
 		overlay.engine.StartExercise(ctx, spec)
@@ -193,6 +196,7 @@ func (overlay *Window) ShowIdle(remaining time.Duration, strict bool, idle anima
 	overlay.applyNativeTopmost(true)
 	overlay.applyNativeOpacity(overlay.config.Opacity)
 	overlay.window.RequestFocus()
+	overlay.scheduleInitialFocus()
 
 	if overlay.engine != nil {
 		overlay.engine.StartIdle(ctx, idle)
@@ -201,6 +205,7 @@ func (overlay *Window) ShowIdle(remaining time.Duration, strict bool, idle anima
 
 // Hide closes the overlay and stops animations.
 func (overlay *Window) Hide() {
+	overlay.releaseClipCursor()
 	overlay.stopEngine()
 	if overlay.config.Fullscreen {
 		overlay.window.SetFullScreen(false)
@@ -209,9 +214,13 @@ func (overlay *Window) Hide() {
 	overlay.window.Hide()
 }
 
-// SetRemaining updates the timer label.
+// SetRemaining updates the timer label. In strict mode it also
+// re-claims focus so the overlay stays visible across all monitors.
 func (overlay *Window) SetRemaining(remaining time.Duration) {
 	overlay.setRemaining(remaining)
+	if overlay.strictMode {
+		overlay.forceForeground()
+	}
 }
 
 // SetStrictMode toggles skip visibility.
@@ -236,15 +245,16 @@ func (overlay *Window) SetOnSkip(handler func()) {
 	}
 }
 
-// UpdateConfig updates overlay visuals.
+// UpdateConfig updates overlay visuals. The window mode (fullscreen vs
+// windowed) is stored but only applied on the next Show/ShowIdle call,
+// so that updating settings while the overlay is hidden does not
+// accidentally make it visible.
 func (overlay *Window) UpdateConfig(config Config) {
 	overlay.config = config
 	overlay.subtitleLabel.Text = config.Message
 	updatedColor := overlayBackgroundColor(config.Opacity)
 	overlay.fullscreenBG.FillColor = updatedColor
 	overlay.cardBackground.FillColor = updatedColor
-	overlay.applyNativeOpacity(config.Opacity)
-	overlay.applyWindowMode()
 	canvas.Refresh(overlay.fullscreenBG)
 	canvas.Refresh(overlay.cardBackground)
 	overlay.titleLabel.Refresh()
@@ -287,6 +297,7 @@ func (overlay *Window) setRemainingUnsafe(remaining time.Duration) {
 }
 
 func (overlay *Window) setStrictModeUnsafe(enabled bool) {
+	overlay.strictMode = enabled
 	if enabled {
 		overlay.skipButton.Hide()
 		overlay.skipButton.Disable()
@@ -306,6 +317,22 @@ func (overlay *Window) setExerciseUnsafe(exercise animation.ExerciseType) {
 	overlay.currentExercise = exercise
 	overlay.exerciseLabel.Text = exerciseDescription(exercise, overlay.localizer)
 	overlay.exerciseLabel.Refresh()
+}
+
+// scheduleInitialFocus re-applies native attributes shortly after the
+// window appears, giving the OS time to finish compositing. This avoids
+// the brief transparent flash on first show.
+func (overlay *Window) scheduleInitialFocus() {
+	go func() {
+		for _, delay := range []time.Duration{
+			50 * time.Millisecond,
+			150 * time.Millisecond,
+			300 * time.Millisecond,
+		} {
+			time.Sleep(delay)
+			overlay.forceForeground()
+		}
+	}()
 }
 
 func (overlay *Window) stopEngine() {
