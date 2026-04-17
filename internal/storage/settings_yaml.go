@@ -27,6 +27,7 @@ type yamlSettings struct {
 	Fullscreen           bool    `yaml:"fullscreen"`
 	RunOnStartup         *bool   `yaml:"run_on_startup"`
 	Language             string  `yaml:"language"`
+	BreakTimerStarted    bool    `yaml:"break_timer_started"`
 }
 
 // LoadSettings reads user preferences from YAML.
@@ -98,6 +99,7 @@ func SaveSettings(appName string, settings preferences.Settings) error {
 		Fullscreen:           settings.Fullscreen,
 		RunOnStartup:         boolPointer(settings.RunOnStartup),
 		Language:             i18n.NormalizeLanguage(settings.Language),
+		BreakTimerStarted:    settings.BreakTimerStarted,
 	}
 
 	serialized, err := yaml.Marshal(fileData)
@@ -165,6 +167,7 @@ func applyYamlSettings(settings *preferences.Settings, fileData yamlSettings) {
 		settings.RunOnStartup = *fileData.RunOnStartup
 	}
 	settings.Language = i18n.NormalizeLanguage(fileData.Language)
+	settings.BreakTimerStarted = fileData.BreakTimerStarted
 }
 
 func boolPointer(value bool) *bool {

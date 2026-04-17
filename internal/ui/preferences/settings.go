@@ -21,6 +21,8 @@ type Settings struct {
 	Fullscreen     bool
 	RunOnStartup   bool
 	Language       string
+
+	BreakTimerStarted bool
 }
 
 // DefaultSettings returns default settings for EagleEye.

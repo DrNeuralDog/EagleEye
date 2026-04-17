@@ -5,6 +5,9 @@ import (
 	"os"
 )
 
+// AutostartArg marks launches initiated by the OS autostart integration.
+const AutostartArg = "--autostart"
+
 // Service defines OS-specific helpers needed by the application.
 type Service interface {
 	GetConfigDir() (string, error)

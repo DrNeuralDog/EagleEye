@@ -31,7 +31,7 @@ func (service *platformService) EnableAutostart(appName, execPath string) error 
 		return fmt.Errorf("enable autostart: %w", err)
 	}
 
-	quotedPath := quoteWindowsPath(execPath)
+	autostartCommand := buildWindowsAutostartCommand(execPath)
 	command := exec.Command(
 		regPath,
 		"add",
@@ -41,7 +41,7 @@ func (service *platformService) EnableAutostart(appName, execPath string) error 
 		"/t",
 		"REG_SZ",
 		"/d",
-		quotedPath,
+		autostartCommand,
 		"/f",
 	)
 	output, err := command.CombinedOutput()
@@ -86,6 +86,10 @@ func fallbackConfigDir(homeDir string) string {
 
 func quoteWindowsPath(execPath string) string {
 	return fmt.Sprintf(`"%s"`, execPath)
+}
+
+func buildWindowsAutostartCommand(execPath string) string {
+	return fmt.Sprintf("%s %s", quoteWindowsPath(execPath), AutostartArg)
 }
 
 func validateWindowsExecPath(execPath string) error {

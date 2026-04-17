@@ -20,6 +20,9 @@ func TestBuildLaunchAgentPlistEscapesXML(t *testing.T) {
 	if !strings.Contains(plist, "Eagle&quot;Eye") {
 		t.Fatalf("plist quote was not XML-escaped:\n%s", plist)
 	}
+	if !strings.Contains(plist, "<string>--autostart</string>") {
+		t.Fatalf("plist missing autostart argument:\n%s", plist)
+	}
 }
 
 func TestBuildLaunchAgentPlistRejectsControlCharacters(t *testing.T) {

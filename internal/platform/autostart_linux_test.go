@@ -17,7 +17,7 @@ func TestBuildDesktopEntryEscapesAndQuotesValues(t *testing.T) {
 	if !strings.Contains(entry, `Name=EagleEye`) {
 		t.Fatalf("desktop entry missing escaped name:\n%s", entry)
 	}
-	if !strings.Contains(entry, `Exec="/opt/Eagle Eye/eagle\$eye%%icon"`) {
+	if !strings.Contains(entry, `Exec="/opt/Eagle Eye/eagle\$eye%%icon" --autostart`) {
 		t.Fatalf("desktop entry missing quoted exec path:\n%s", entry)
 	}
 }
