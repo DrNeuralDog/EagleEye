@@ -77,6 +77,15 @@ func (overlay *Window) forceForeground() {
 	}
 }
 
+// keepTopmost restores topmost ordering without activating the overlay.
+func (overlay *Window) keepTopmost() {
+	hwnd := overlay.cachedHWND
+	if hwnd == 0 {
+		return
+	}
+	procSetWindowPos.Call(hwnd, hwndTopmost, 0, 0, 0, 0, uintptr(swpNoMove|swpNoSize|swpNoActivate))
+}
+
 // releaseClipCursor removes the cursor restriction.
 func (overlay *Window) releaseClipCursor() {
 	procClipCursor.Call(0)

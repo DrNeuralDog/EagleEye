@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"image/color"
+	"strings"
 	"time"
 
 	"eagleeye/internal/ui/animation"
@@ -31,34 +32,42 @@ type Session struct {
 
 // Window manages the overlay UI.
 type Window struct {
-	app             fyne.App
-	window          fyne.Window
-	config          Config
-	image           *canvas.Image
-	timerLabel      *canvas.Text
-	skipButton      *widget.Button
-	rightPanel      *fyne.Container
-	titleLabel      *canvas.Text
-	subtitleLabel   *canvas.Text
-	exerciseLabel   *canvas.Text
-	fullscreenBG    *canvas.Rectangle
-	cardBackground  *canvas.Rectangle
-	cardHost        *fyne.Container
-	cardHostLayout  *overlayCardHostLayout
-	engine          *animation.Engine
-	cancelCtx       context.CancelFunc
-	onSkip          func()
-	localizer       *i18n.Localizer
-	currentExercise animation.ExerciseType
-	strictMode      bool
-	cachedHWND      uintptr
+	app              fyne.App
+	window           fyne.Window
+	config           Config
+	image            *canvas.Image
+	timerLabel       *canvas.Text
+	skipButton       *widget.Button
+	rightPanel       *fyne.Container
+	rightPanelLayout *rightPanelLayout
+	titleLabel       *canvas.Text
+	subtitleLabel    *canvas.Text
+	exerciseLabel    *canvas.Text
+	fullscreenBG     *canvas.Rectangle
+	cardBackground   *canvas.Rectangle
+	cardHost         *fyne.Container
+	cardHostLayout   *overlayCardHostLayout
+	engine           *animation.Engine
+	cancelCtx        context.CancelFunc
+	onSkip           func()
+	localizer        *i18n.Localizer
+	currentExercise  animation.ExerciseType
+	strictMode       bool
+	cachedHWND       uintptr
 }
 
 const (
-	overlayWidthFraction  = float32(0.14)
-	overlayHeightFraction = float32(0.18)
-	defaultScreenWidth    = float32(1920)
-	defaultScreenHeight   = float32(1080)
+	overlayWidthFraction    = float32(0.14)
+	overlayHeightFraction   = float32(0.18)
+	defaultScreenWidth      = float32(1920)
+	defaultScreenHeight     = float32(1080)
+	overlayCardCornerRadius = float32(32)
+	overlayBottomClearance  = float32(12)
+	skipModeImageScale      = float32(1.05)
+	oversizedSpriteScale    = float32(0.0)
+	oversizedSpriteHeight   = float32(0.0)
+	oversizedSpriteWidth    = float32(1.)
+	oversizedSpriteOffsetY  = float32(-0.0)
 )
 
 type splashWindowDriver interface {
@@ -82,6 +91,7 @@ func New(app fyne.App, config Config, engine *animation.Engine, localizer *i18n.
 
 	fullscreenBackground := canvas.NewRectangle(overlayBackgroundColor(config.Opacity))
 	cardBackground := canvas.NewRectangle(overlayBackgroundColor(config.Opacity))
+	cardBackground.CornerRadius = overlayCardCornerRadius
 
 	image := canvas.NewImageFromResource(nil)
 	image.FillMode = canvas.ImageFillContain
@@ -108,7 +118,8 @@ func New(app fyne.App, config Config, engine *animation.Engine, localizer *i18n.
 	skipButton := widget.NewButton(localizer.T("overlay.skip"), nil)
 
 	leftContent := container.New(&leftPanelLayout{}, titleLabel, subtitleLabel, exerciseLabel, timerLabel)
-	rightContent := container.New(&rightPanelLayout{}, image, skipButton)
+	rightLayout := &rightPanelLayout{}
+	rightContent := container.New(rightLayout, image, skipButton)
 	content := container.NewGridWithColumns(2, leftContent, rightContent)
 	card := container.NewMax(cardBackground, content)
 	cardHostLayout := &overlayCardHostLayout{fullscreen: config.Fullscreen}
@@ -117,23 +128,24 @@ func New(app fyne.App, config Config, engine *animation.Engine, localizer *i18n.
 
 	window.SetContent(root)
 	overlay := &Window{
-		app:             app,
-		window:          window,
-		config:          config,
-		image:           image,
-		timerLabel:      timerLabel,
-		skipButton:      skipButton,
-		rightPanel:      rightContent,
-		titleLabel:      titleLabel,
-		subtitleLabel:   subtitleLabel,
-		exerciseLabel:   exerciseLabel,
-		fullscreenBG:    fullscreenBackground,
-		cardBackground:  cardBackground,
-		cardHost:        cardHost,
-		cardHostLayout:  cardHostLayout,
-		engine:          engine,
-		localizer:       localizer,
-		currentExercise: animation.ExerciseLeftRight,
+		app:              app,
+		window:           window,
+		config:           config,
+		image:            image,
+		timerLabel:       timerLabel,
+		skipButton:       skipButton,
+		rightPanel:       rightContent,
+		rightPanelLayout: rightLayout,
+		titleLabel:       titleLabel,
+		subtitleLabel:    subtitleLabel,
+		exerciseLabel:    exerciseLabel,
+		fullscreenBG:     fullscreenBackground,
+		cardBackground:   cardBackground,
+		cardHost:         cardHost,
+		cardHostLayout:   cardHostLayout,
+		engine:           engine,
+		localizer:        localizer,
+		currentExercise:  animation.ExerciseLeftRight,
 	}
 
 	overlay.setExerciseUnsafe(animation.ExerciseLeftRight)
@@ -176,6 +188,8 @@ func (overlay *Window) Show(session Session, spec animation.ExerciseSpec) {
 	overlay.applyNativeOpacity(overlay.config.Opacity)
 	overlay.window.RequestFocus()
 	overlay.scheduleInitialFocus()
+	overlay.scheduleTopmostKeep(ctx)
+	overlay.scheduleNativeShape(overlay.nativeShapeRadius())
 
 	if overlay.engine != nil {
 		overlay.engine.StartExercise(ctx, spec)
@@ -197,6 +211,8 @@ func (overlay *Window) ShowIdle(remaining time.Duration, strict bool, idle anima
 	overlay.applyNativeOpacity(overlay.config.Opacity)
 	overlay.window.RequestFocus()
 	overlay.scheduleInitialFocus()
+	overlay.scheduleTopmostKeep(ctx)
+	overlay.scheduleNativeShape(overlay.nativeShapeRadius())
 
 	if overlay.engine != nil {
 		overlay.engine.StartIdle(ctx, idle)
@@ -214,13 +230,15 @@ func (overlay *Window) Hide() {
 	overlay.window.Hide()
 }
 
-// SetRemaining updates the timer label. In strict mode it also
-// re-claims focus so the overlay stays visible across all monitors.
+// SetRemaining updates the timer label and keeps the overlay above regular
+// windows. Strict mode also re-claims focus so it stays visible across screens.
 func (overlay *Window) SetRemaining(remaining time.Duration) {
 	overlay.setRemaining(remaining)
 	if overlay.strictMode {
 		overlay.forceForeground()
+		return
 	}
+	overlay.keepTopmost()
 }
 
 // SetStrictMode toggles skip visibility.
@@ -278,8 +296,20 @@ func (overlay *Window) RefreshLocalization() {
 // SetSprite updates the center sprite image.
 func (overlay *Window) SetSprite(resource fyne.Resource) {
 	fyne.Do(func() {
+		transform := spriteTransformForResource(resource)
 		overlay.image.Resource = resource
+		if transform.stretch {
+			overlay.image.FillMode = canvas.ImageFillStretch
+		} else {
+			overlay.image.FillMode = canvas.ImageFillContain
+		}
+		if overlay.rightPanelLayout != nil {
+			overlay.rightPanelLayout.SetSpriteTransform(transform)
+		}
 		overlay.image.Refresh()
+		if overlay.rightPanel != nil {
+			overlay.rightPanel.Refresh()
+		}
 	})
 }
 
@@ -335,6 +365,23 @@ func (overlay *Window) scheduleInitialFocus() {
 	}()
 }
 
+func (overlay *Window) scheduleTopmostKeep(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(250 * time.Millisecond)
+		defer ticker.Stop()
+
+		overlay.keepTopmost()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				overlay.keepTopmost()
+			}
+		}
+	}()
+}
+
 func (overlay *Window) stopEngine() {
 	if overlay.cancelCtx != nil {
 		overlay.cancelCtx()
@@ -349,12 +396,54 @@ func (overlay *Window) applyWindowMode() {
 	if overlay.cardHost != nil {
 		overlay.cardHost.Refresh()
 	}
+	// In windowed mode the fullscreen backdrop shares the card's bounds,
+	// so it must be rounded too — otherwise it pokes through the card's
+	// rounded corners. In fullscreen it covers the whole screen, so keep
+	// it square.
+	if overlay.config.Fullscreen {
+		overlay.fullscreenBG.CornerRadius = 0
+	} else {
+		overlay.fullscreenBG.CornerRadius = overlayCardCornerRadius
+	}
+	canvas.Refresh(overlay.fullscreenBG)
 	if overlay.config.Fullscreen {
 		overlay.window.SetFullScreen(true)
 		return
 	}
 	overlay.window.SetFullScreen(false)
 	overlay.resizeToScreenFraction()
+}
+
+// nativeShapeRadius is the rounded-corner radius to apply to the
+// native HWND for the current window mode. Fullscreen returns 0 so
+// the window covers the whole screen without clipping.
+func (overlay *Window) nativeShapeRadius() int32 {
+	if overlay.config.Fullscreen {
+		return 0
+	}
+	return int32(overlayCardCornerRadius)
+}
+
+// scheduleNativeShape re-applies the rounded native window region a
+// few times with small delays after window.Show(). Retries are needed
+// because the HWND can take a moment to receive its final client size
+// via Windows message pumping, and because Fyne's initial layout may
+// trigger an additional resize that clears the region.
+func (overlay *Window) scheduleNativeShape(radius int32) {
+	go func() {
+		for _, delay := range []time.Duration{
+			0,
+			50 * time.Millisecond,
+			150 * time.Millisecond,
+			300 * time.Millisecond,
+			600 * time.Millisecond,
+		} {
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+			overlay.applyNativeShape(radius)
+		}
+	}()
 }
 
 func (overlay *Window) resizeToScreenFraction() {
@@ -383,7 +472,7 @@ func calculateOverlayCardSize(screenSize fyne.Size, minSize fyne.Size) fyne.Size
 	}
 
 	width := screenSize.Width * overlayWidthFraction
-	height := screenSize.Height * overlayHeightFraction
+	height := screenSize.Height*overlayHeightFraction + overlayBottomClearance
 	if width < minSize.Width {
 		width = minSize.Width
 	}
@@ -428,7 +517,68 @@ func exerciseDescription(exercise animation.ExerciseType, localizer *i18n.Locali
 	}
 }
 
-type rightPanelLayout struct{}
+func spriteScaleForResource(resource fyne.Resource) float32 {
+	if isOversizedDirectionalSprite(resource) {
+		return oversizedSpriteScale
+	}
+	return 1
+}
+
+func spriteTransformForResource(resource fyne.Resource) spriteTransform {
+	scale := spriteScaleForResource(resource)
+	transform := spriteTransform{
+		scaleX: 1,
+		scaleY: scale,
+	}
+	if isOversizedDirectionalSprite(resource) {
+		transform.scaleX = oversizedSpriteWidth
+		transform.scaleY = scale * oversizedSpriteHeight
+		transform.offsetYFraction = oversizedSpriteOffsetY
+		transform.stretch = true
+	}
+	return transform
+}
+
+func isOversizedDirectionalSprite(resource fyne.Resource) bool {
+	if resource == nil {
+		return false
+	}
+	name := resource.Name()
+	return strings.HasSuffix(name, "Falcon looks down.png") || strings.HasSuffix(name, "Falcon looks left.png")
+}
+
+type spriteTransform struct {
+	scaleX          float32
+	scaleY          float32
+	offsetYFraction float32
+	stretch         bool
+}
+
+func normalizeSpriteTransform(transform spriteTransform) spriteTransform {
+	if transform.scaleX <= 0 {
+		transform.scaleX = 1
+	}
+	if transform.scaleY <= 0 {
+		transform.scaleY = 1
+	}
+	return transform
+}
+
+type rightPanelLayout struct {
+	spriteTransform spriteTransform
+}
+
+func (layout *rightPanelLayout) SetSpriteScale(scale float32) {
+	layout.SetSpriteTransform(spriteTransform{scaleX: 1, scaleY: scale})
+}
+
+func (layout *rightPanelLayout) SetSpriteTransform(transform spriteTransform) {
+	layout.spriteTransform = normalizeSpriteTransform(transform)
+}
+
+func (layout *rightPanelLayout) currentSpriteTransform() spriteTransform {
+	return normalizeSpriteTransform(layout.spriteTransform)
+}
 
 func (layout *rightPanelLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	if len(objects) < 2 {
@@ -436,23 +586,26 @@ func (layout *rightPanelLayout) Layout(objects []fyne.CanvasObject, size fyne.Si
 	}
 	image := objects[0]
 	skip := objects[1]
+	transform := layout.currentSpriteTransform()
 
 	skipSize := skip.MinSize()
 	if !skip.Visible() {
-		side := size.Height
-		if side > size.Width {
-			side = size.Width
+		baseSide := size.Height
+		if baseSide > size.Width {
+			baseSide = size.Width
 		}
-		x := size.Width - side
+		height := baseSide * transform.scaleY
+		width := height * transform.scaleX
+		x := size.Width - width
 		if x < 0 {
 			x = 0
 		}
-		y := (size.Height - side) / 2
+		y := (size.Height-baseSide)/2 + (baseSide - height) + baseSide*transform.offsetYFraction
 		if y < 0 {
 			y = 0
 		}
 		image.Move(fyne.NewPos(x, y))
-		image.Resize(fyne.NewSize(side, side))
+		image.Resize(fyne.NewSize(width, height))
 		return
 	}
 
@@ -460,37 +613,59 @@ func (layout *rightPanelLayout) Layout(objects []fyne.CanvasObject, size fyne.Si
 	if skipHeight > size.Height*0.25 {
 		skipHeight = size.Height * 0.25
 	}
-	imageAreaHeight := size.Height - skipHeight
+	bottomClearance := overlayBottomClearance
+	if bottomClearance > size.Height-skipHeight {
+		bottomClearance = size.Height - skipHeight
+	}
+	if bottomClearance < 0 {
+		bottomClearance = 0
+	}
+	imageAreaHeight := size.Height - skipHeight - bottomClearance
 	if imageAreaHeight < 0 {
 		imageAreaHeight = 0
 	}
 
 	margin := imageAreaHeight * 0.05
-	side := imageAreaHeight * 0.90
-	if side > size.Width-margin {
-		side = size.Width - margin
+	baseSide := imageAreaHeight * 0.90 * skipModeImageScale
+	if baseSide > size.Width-margin {
+		baseSide = size.Width - margin
 	}
-	if side < 0 {
-		side = 0
+	if baseSide < 0 {
+		baseSide = 0
 	}
-	x := size.Width - margin - side
+	height := baseSide * transform.scaleY
+	width := height * transform.scaleX
+	if width > size.Width-margin {
+		width = size.Width - margin
+	}
+	if width < 0 {
+		width = 0
+	}
+	if height < 0 {
+		height = 0
+	}
+	x := size.Width - margin - width
 	if x < 0 {
 		x = 0
 	}
-	y := margin
+	y := margin + (baseSide - height) + baseSide*transform.offsetYFraction
 	image.Move(fyne.NewPos(x, y))
-	image.Resize(fyne.NewSize(side, side))
+	image.Resize(fyne.NewSize(width, height))
 
 	skipWidth := skipSize.Width
 	skipWidth = skipWidth * 1.4
 	if skipWidth > size.Width {
 		skipWidth = size.Width
 	}
-	skipX := x + side - skipWidth
+	skipX := x + width - skipWidth
 	if skipX < 0 {
 		skipX = 0
 	}
 	skipY := imageAreaHeight + (skipHeight-skipSize.Height)/2
+	maxSkipY := size.Height - bottomClearance - skipSize.Height
+	if skipY > maxSkipY {
+		skipY = maxSkipY
+	}
 	if skipY < 0 {
 		skipY = 0
 	}
@@ -511,7 +686,7 @@ func (layout *rightPanelLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 	if skipMin.Width > width {
 		width = skipMin.Width
 	}
-	return fyne.NewSize(width, imageMin.Height+skipMin.Height)
+	return fyne.NewSize(width, imageMin.Height+skipMin.Height+overlayBottomClearance)
 }
 
 type leftPanelLayout struct{}
