@@ -1,11 +1,10 @@
 package tray
 
 import (
+	"eagleeye/internal/ui/i18n"
 	"fmt"
 	"sync"
 	"time"
-
-	"eagleeye/internal/ui/i18n"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"

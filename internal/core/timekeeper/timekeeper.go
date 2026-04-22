@@ -1,11 +1,10 @@
 package timekeeper
 
 import (
+	"eagleeye/internal/core/model"
 	"errors"
 	"sync"
 	"time"
-
-	"eagleeye/internal/core/model"
 )
 
 // ErrIdleUnsupported indicates idle detection is not available on this system.
@@ -22,6 +21,12 @@ type Config struct {
 }
 
 // TimeKeeper is a state machine that manages break scheduling.
+//
+// Callers own the lifecycle: Start begins the ticker loop, Stop synchronously
+// shuts it down, and Subscribe exposes state/progress events. Progress events
+// are best-effort and may be dropped when a subscriber is full; non-progress
+// events are delivered by discarding stale queued events until space is
+// available.
 type TimeKeeper struct {
 	mu               sync.Mutex
 	config           model.TimeKeeperConfig
@@ -35,6 +40,7 @@ type TimeKeeper struct {
 	lastIdleCheck    time.Time
 	events           []chan Event
 	stopCh           chan struct{}
+	doneCh           chan struct{}
 	running          bool
 	paused           bool
 	lastProgressSent time.Time
@@ -54,20 +60,22 @@ func New(config model.TimeKeeperConfig, options Config) *TimeKeeper {
 		options:       options,
 		state:         StateWork,
 		previousState: StateWork,
-		stopCh:        make(chan struct{}),
 	}
 	keeper.resetWorkTimersLocked()
 	return keeper
 }
 
-// SetIdleChecker injects an idle checker.
+// SetIdleChecker injects an idle checker. Passing nil disables idle-reset
+// checks; timer progression continues without querying idle state.
 func (keeper *TimeKeeper) SetIdleChecker(checker IdleChecker) {
 	keeper.mu.Lock()
 	defer keeper.mu.Unlock()
 	keeper.idleChecker = checker
 }
 
-// Subscribe registers a new observer channel.
+// Subscribe registers a new observer channel. Non-positive buffers are
+// normalized to 1. Subscriber channels are closed by Stop and are not replayed
+// or reused after they have been closed.
 func (keeper *TimeKeeper) Subscribe(buffer int) <-chan Event {
 	if buffer <= 0 {
 		buffer = 1
@@ -79,13 +87,19 @@ func (keeper *TimeKeeper) Subscribe(buffer int) <-chan Event {
 	return ch
 }
 
-// Start launches the ticking loop.
+// Start launches the ticking loop. Calling Start while the keeper is already
+// running is a no-op. Calling Start after Stop is supported; it creates a fresh
+// stop/done channel pair and emits a StateWork event for current subscribers.
 func (keeper *TimeKeeper) Start() {
 	keeper.mu.Lock()
 	if keeper.running {
 		keeper.mu.Unlock()
 		return
 	}
+	stopCh := make(chan struct{})
+	doneCh := make(chan struct{})
+	keeper.stopCh = stopCh
+	keeper.doneCh = doneCh
 	keeper.running = true
 	keeper.paused = false
 	keeper.state = StateWork
@@ -100,22 +114,34 @@ func (keeper *TimeKeeper) Start() {
 		At:    time.Now(),
 	})
 
-	go keeper.run()
+	go keeper.run(stopCh, doneCh)
 }
 
-// Stop terminates the ticking loop and closes observers.
+// Stop terminates the ticking loop and closes observers. It waits for the run
+// loop to exit before closing subscriber channels. If Start was never called,
+// Stop still closes all current subscribers.
 func (keeper *TimeKeeper) Stop() {
 	keeper.mu.Lock()
 	if !keeper.running {
+		events := keeper.events
+		keeper.events = nil
 		keeper.mu.Unlock()
+		for _, ch := range events {
+			close(ch)
+		}
 		return
 	}
-	close(keeper.stopCh)
+	stopCh := keeper.stopCh
+	doneCh := keeper.doneCh
+	close(stopCh)
 	keeper.running = false
 	events := keeper.events
 	keeper.events = nil
 	keeper.mu.Unlock()
 
+	if doneCh != nil {
+		<-doneCh
+	}
 	for _, ch := range events {
 		close(ch)
 	}
@@ -129,14 +155,19 @@ func (keeper *TimeKeeper) Pause() {
 		return
 	}
 	keeper.paused = true
+	remaining := keeper.remaining
+	if keeper.state == StateWork {
+		remaining = keeper.nextBreakRemainingLocked()
+	}
 	keeper.previousState = keeper.state
 	keeper.state = StatePaused
 	keeper.mu.Unlock()
 
 	keeper.emit(Event{
-		Type:  EventStateChange,
-		State: StatePaused,
-		At:    time.Now(),
+		Type:      EventStateChange,
+		State:     StatePaused,
+		Remaining: remaining,
+		At:        time.Now(),
 	})
 }
 
@@ -150,16 +181,23 @@ func (keeper *TimeKeeper) Resume() {
 	keeper.paused = false
 	keeper.state = keeper.previousState
 	currentState := keeper.state
+	remaining := keeper.remaining
+	if currentState == StateWork {
+		remaining = keeper.nextBreakRemainingLocked()
+	}
 	keeper.mu.Unlock()
 
 	keeper.emit(Event{
-		Type:  EventStateChange,
-		State: currentState,
-		At:    time.Now(),
+		Type:      EventStateChange,
+		State:     currentState,
+		Remaining: remaining,
+		At:        time.Now(),
 	})
 }
 
-// UpdateConfig updates runtime configuration and resets work timers.
+// UpdateConfig updates runtime configuration and resets work timers. If the
+// keeper is currently in a break, the active break duration is not recomputed;
+// the new work timers take effect when the keeper returns to StateWork.
 func (keeper *TimeKeeper) UpdateConfig(config model.TimeKeeperConfig) {
 	keeper.mu.Lock()
 	if config.IdleCheckInterval <= 0 {
@@ -227,13 +265,14 @@ func (keeper *TimeKeeper) ResetForIdle() {
 	keeper.mu.Unlock()
 }
 
-func (keeper *TimeKeeper) run() {
+func (keeper *TimeKeeper) run(stopCh <-chan struct{}, doneCh chan<- struct{}) {
+	defer close(doneCh)
 	ticker := time.NewTicker(keeper.options.TickInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-keeper.stopCh:
+		case <-stopCh:
 			return
 		case tickTime := <-ticker.C:
 			keeper.tick(tickTime)

@@ -1,13 +1,8 @@
 package platform
 
-import "time"
+import "eagleeye/internal/core/timekeeper"
 
-// IdleProvider returns the duration since last user input.
-type IdleProvider interface {
-	IdleDuration() (time.Duration, error)
-}
-
-// NewIdleProvider returns a platform-specific idle provider.
-func NewIdleProvider() IdleProvider {
+// NewIdleChecker returns a platform-specific idle checker.
+func NewIdleChecker() timekeeper.IdleChecker {
 	return newIdleProvider()
 }

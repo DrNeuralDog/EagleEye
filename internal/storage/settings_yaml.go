@@ -1,20 +1,23 @@
 package storage
 
 import (
+	"eagleeye/internal/ui/i18n"
+	"eagleeye/internal/ui/preferences"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
-	"eagleeye/internal/ui/i18n"
-	"eagleeye/internal/ui/preferences"
 	"gopkg.in/yaml.v3"
 )
 
-const settingsFileName = "settings.yaml"
-const logFileName = "EagleEye.log.jsonl"
-const maxSettingsFileSize = 256 * 1024
+const (
+	settingsFileName    = "settings.yaml"
+	logFileName         = "EagleEye.log.jsonl"
+	maxSettingsFileSize = 256 * 1024
+	configPathEnv       = "EAGLEEYE_CONFIG_PATH"
+)
 
 type yamlSettings struct {
 	ShortIntervalMinutes int     `yaml:"short_interval_minutes"`
@@ -127,6 +130,9 @@ func ResolveLogPath(appName string) (string, error) {
 }
 
 func resolveConfigPath(appName string) (string, error) {
+	if configPath, ok := os.LookupEnv(configPathEnv); ok && configPath != "" {
+		return filepath.Clean(configPath), nil
+	}
 	configDir, err := resolveAppConfigDir(appName)
 	if err != nil {
 		return "", err

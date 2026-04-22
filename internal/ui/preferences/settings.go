@@ -1,9 +1,8 @@
 package preferences
 
 import (
-	"time"
-
 	"eagleeye/internal/core/model"
+	"time"
 )
 
 const idleCheckInterval = 20 * time.Second

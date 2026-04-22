@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"eagleeye/internal/core/timekeeper"
 	"fmt"
 	"syscall"
 	"time"
@@ -14,7 +15,7 @@ type lastInputInfo struct {
 	dwTime uint32
 }
 
-func newIdleProvider() IdleProvider {
+func newIdleProvider() timekeeper.IdleChecker {
 	return &idleProvider{}
 }
 
@@ -39,5 +40,9 @@ func (provider *idleProvider) IdleDuration() (time.Duration, error) {
 	}
 
 	idleMillis := uint64(tickResult) - uint64(info.dwTime)
+	const maxDurationMillis = uint64(1<<63-1) / uint64(time.Millisecond)
+	if idleMillis > maxDurationMillis {
+		return time.Duration(1<<63 - 1), nil
+	}
 	return time.Duration(idleMillis) * time.Millisecond, nil
 }

@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	gwlExStyle  int32 = -20
-	wsExLayered       = 0x00080000
-	lwaAlpha          = 0x2
+	gwlExStyle  uintptr = ^uintptr(19)
+	wsExLayered uintptr = 0x00080000
+	lwaAlpha    uintptr = 0x2
 )
 
 var (
@@ -35,11 +35,11 @@ func (overlay *Window) applyNativeOpacity(alpha uint8) {
 
 		overlay.cachedHWND = hwnd
 
-		style, _, _ := procGetWindowLongPtrW.Call(hwnd, int32ToUintptr(gwlExStyle))
+		style, _, _ := procGetWindowLongPtrW.Call(hwnd, gwlExStyle)
 		if style&wsExLayered == 0 {
-			procSetWindowLongPtrW.Call(hwnd, int32ToUintptr(gwlExStyle), style|wsExLayered)
+			_, _, _ = procSetWindowLongPtrW.Call(hwnd, gwlExStyle, style|wsExLayered)
 		}
-		procSetLayeredWindowAttributes.Call(hwnd, 0, uintptr(alpha), uintptr(lwaAlpha))
+		_, _, _ = procSetLayeredWindowAttributes.Call(hwnd, 0, uintptr(alpha), lwaAlpha)
 	})
 }
 
@@ -52,8 +52,4 @@ func extractHWND(context any) uintptr {
 	default:
 		return 0
 	}
-}
-
-func int32ToUintptr(value int32) uintptr {
-	return uintptr(uint32(value))
 }

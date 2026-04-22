@@ -9,11 +9,11 @@ import (
 )
 
 const (
-	hwndTopmost   = ^uintptr(0)
-	hwndNoTopmost = ^uintptr(1)
-	swpNoSize     = 0x0001
-	swpNoMove     = 0x0002
-	swpNoActivate = 0x0010
+	hwndTopmost   uintptr = ^uintptr(0)
+	hwndNoTopmost uintptr = ^uintptr(1)
+	swpNoSize     uintptr = 0x0001
+	swpNoMove     uintptr = 0x0002
+	swpNoActivate uintptr = 0x0010
 )
 
 type winRECT struct {
@@ -46,7 +46,7 @@ func (overlay *Window) applyNativeTopmost(enable bool) {
 			insertAfter = hwndTopmost
 		}
 		flags := uintptr(swpNoMove | swpNoSize | swpNoActivate)
-		procSetWindowPos.Call(hwnd, insertAfter, 0, 0, 0, 0, flags)
+		_, _, _ = procSetWindowPos.Call(hwnd, insertAfter, 0, 0, 0, 0, flags)
 	})
 }
 
@@ -59,21 +59,23 @@ func (overlay *Window) forceForeground() {
 		return
 	}
 
-	procSetForegroundWindow.Call(hwnd)
-	procSetWindowPos.Call(hwnd, hwndTopmost, 0, 0, 0, 0, uintptr(swpNoMove|swpNoSize))
+	_, _, _ = procSetForegroundWindow.Call(hwnd)
+	_, _, _ = procSetWindowPos.Call(hwnd, hwndTopmost, 0, 0, 0, 0, uintptr(swpNoMove|swpNoSize))
 
 	// Re-apply layered opacity in case Windows reset it.
-	style, _, _ := procGetWindowLongPtrW.Call(hwnd, int32ToUintptr(gwlExStyle))
+	style, _, _ := procGetWindowLongPtrW.Call(hwnd, gwlExStyle)
 	if style&wsExLayered == 0 {
-		procSetWindowLongPtrW.Call(hwnd, int32ToUintptr(gwlExStyle), style|wsExLayered)
+		_, _, _ = procSetWindowLongPtrW.Call(hwnd, gwlExStyle, style|wsExLayered)
 	}
-	procSetLayeredWindowAttributes.Call(hwnd, 0, uintptr(overlay.config.Opacity), uintptr(lwaAlpha))
+	_, _, _ = procSetLayeredWindowAttributes.Call(hwnd, 0, uintptr(overlay.config.Opacity), lwaAlpha)
 
 	// Clip cursor only in strict mode.
 	if overlay.strictMode {
 		var rect winRECT
-		procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
-		procClipCursor.Call(uintptr(unsafe.Pointer(&rect)))
+		ret, _, _ := procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
+		if ret != 0 {
+			_, _, _ = procClipCursor.Call(uintptr(unsafe.Pointer(&rect)))
+		}
 	}
 }
 
@@ -83,10 +85,10 @@ func (overlay *Window) keepTopmost() {
 	if hwnd == 0 {
 		return
 	}
-	procSetWindowPos.Call(hwnd, hwndTopmost, 0, 0, 0, 0, uintptr(swpNoMove|swpNoSize|swpNoActivate))
+	_, _, _ = procSetWindowPos.Call(hwnd, hwndTopmost, 0, 0, 0, 0, uintptr(swpNoMove|swpNoSize|swpNoActivate))
 }
 
 // releaseClipCursor removes the cursor restriction.
 func (overlay *Window) releaseClipCursor() {
-	procClipCursor.Call(0)
+	_, _, _ = procClipCursor.Call(0)
 }

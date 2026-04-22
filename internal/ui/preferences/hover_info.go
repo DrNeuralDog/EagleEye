@@ -20,7 +20,7 @@ const (
 )
 
 func newDelayedHoverInfoRow(content fyne.CanvasObject, canvas fyne.Canvas, message func() string, onTap func()) fyne.CanvasObject {
-	return container.NewMax(content, newDelayedHoverInfoHotspot(canvas, message, onTap))
+	return container.NewStack(content, newDelayedHoverInfoHotspot(canvas, message, onTap))
 }
 
 type delayedHoverInfoHotspot struct {

@@ -2,7 +2,8 @@ package animation
 
 import (
 	"context"
-	"math/rand"
+	"crypto/rand"
+	"math/big"
 	"sync"
 	"time"
 
@@ -26,12 +27,16 @@ type Range struct {
 }
 
 // Random returns a random duration within the range.
-func (value Range) Random(rng *rand.Rand) time.Duration {
+func (value Range) Random() time.Duration {
 	if value.Max <= value.Min {
 		return value.Min
 	}
 	delta := value.Max - value.Min
-	return value.Min + time.Duration(rng.Int63n(int64(delta)))
+	offset, err := rand.Int(rand.Reader, big.NewInt(int64(delta)))
+	if err != nil {
+		return value.Min
+	}
+	return value.Min + time.Duration(offset.Int64())
 }
 
 // Config contains animation timing values.
@@ -60,7 +65,6 @@ type Engine struct {
 	updateSprite func(fyne.Resource)
 	onExercise   func(ExerciseType)
 	cancel       context.CancelFunc
-	rng          *rand.Rand
 }
 
 // New creates a new animation engine.
@@ -68,7 +72,6 @@ func New(config Config, updateSprite func(fyne.Resource)) *Engine {
 	return &Engine{
 		config:       config,
 		updateSprite: updateSprite,
-		rng:          rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -93,24 +96,24 @@ func (engine *Engine) StartIdle(ctx context.Context, idle IdleSpec) {
 	engine.start(ctx, func(runCtx context.Context) {
 		engine.updateSprite(idle.Open)
 		for {
-			if !sleepWithContext(runCtx, engine.config.BlinkInterval.Random(engine.rng)) {
+			if !sleepWithContext(runCtx, engine.config.BlinkInterval.Random()) {
 				return
 			}
 			engine.updateSprite(idle.Closed)
-			if !sleepWithContext(runCtx, engine.config.BlinkClosedDuration.Random(engine.rng)) {
+			if !sleepWithContext(runCtx, engine.config.BlinkClosedDuration.Random()) {
 				return
 			}
 			engine.updateSprite(idle.Open)
-			if !sleepWithContext(runCtx, engine.config.BlinkOpenDuration.Random(engine.rng)) {
+			if !sleepWithContext(runCtx, engine.config.BlinkOpenDuration.Random()) {
 				return
 			}
 
-			if engine.rng.Float64() <= engine.config.DoubleBlinkChance {
-				if !sleepWithContext(runCtx, engine.config.DoubleBlinkGap.Random(engine.rng)) {
+			if randomUnitFloat() <= engine.config.DoubleBlinkChance {
+				if !sleepWithContext(runCtx, engine.config.DoubleBlinkGap.Random()) {
 					return
 				}
 				engine.updateSprite(idle.Closed)
-				if !sleepWithContext(runCtx, engine.config.BlinkClosedDuration.Random(engine.rng)) {
+				if !sleepWithContext(runCtx, engine.config.BlinkClosedDuration.Random()) {
 					return
 				}
 				engine.updateSprite(idle.Open)
@@ -197,7 +200,7 @@ func (engine *Engine) runDirectional(ctx context.Context, spec ExerciseSpec, exe
 	start := time.Now()
 	for time.Since(start) < duration {
 		engine.updateSprite(spec.Center)
-		if !sleepWithContext(ctx, engine.config.CenterDuration.Random(engine.rng)) {
+		if !sleepWithContext(ctx, engine.config.CenterDuration.Random()) {
 			return
 		}
 
@@ -217,19 +220,19 @@ func (engine *Engine) runDirectional(ctx context.Context, spec ExerciseSpec, exe
 	}
 }
 
-func (engine *Engine) runMove(ctx context.Context, target fyne.Resource, center fyne.Resource) bool {
+func (engine *Engine) runMove(ctx context.Context, target, center fyne.Resource) bool {
 	engine.updateSprite(target)
-	if !sleepWithContext(ctx, engine.config.MoveDuration.Random(engine.rng)) {
+	if !sleepWithContext(ctx, engine.config.MoveDuration.Random()) {
 		return false
 	}
-	if !sleepWithContext(ctx, engine.config.HoldDuration.Random(engine.rng)) {
+	if !sleepWithContext(ctx, engine.config.HoldDuration.Random()) {
 		return false
 	}
 	engine.updateSprite(center)
-	if !sleepWithContext(ctx, engine.config.ReturnDuration.Random(engine.rng)) {
+	if !sleepWithContext(ctx, engine.config.ReturnDuration.Random()) {
 		return false
 	}
-	return sleepWithContext(ctx, engine.config.PauseDuration.Random(engine.rng))
+	return sleepWithContext(ctx, engine.config.PauseDuration.Random())
 }
 
 func (engine *Engine) runBlinkExercise(ctx context.Context, spec ExerciseSpec, duration time.Duration) {
@@ -258,4 +261,13 @@ func sleepWithContext(ctx context.Context, duration time.Duration) bool {
 	case <-timer.C:
 		return true
 	}
+}
+
+func randomUnitFloat() float64 {
+	const precision = int64(1_000_000)
+	value, err := rand.Int(rand.Reader, big.NewInt(precision))
+	if err != nil {
+		return 0
+	}
+	return float64(value.Int64()) / float64(precision)
 }
