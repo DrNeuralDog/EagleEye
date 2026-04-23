@@ -2,71 +2,71 @@
 
 [![Go](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://go.dev) [![Fyne](https://img.shields.io/badge/Fyne-2.7+-00ACD7.svg)](https://fyne.io) [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-brightgreen.svg)]() [![Release](https://img.shields.io/github/v/release/DrNeuralDog/EagleEye?include_prereleases&sort=semver)](https://github.com/DrNeuralDog/EagleEye/releases)
 
-## Проблема и решение
+## The problem and the fix
 
-Если постоянно залипать в экран на много часов подряд, глаза быстро начинают уставать: появляется сухость, тяжесть, расфокус, а нормальные перерывы легко забываются. Именно из этой боли и появился **EagleEye** - небольшая кроссплатформенная утилита, которая живет в системном трее и мягко возвращает внимание к здоровью глаз. А существующие на рынке альтернативы уже морально устарели и не обладают всеми требуемыми характеристиками: либо это тяжелые корпоративные решения, либо заброшенные pet-проекты без нормальной кроссплатформенности, idle tracking и свежего UI.
+Stare at a screen long enough and your eyes start begging for mercy: dryness, heaviness, blurry focus - and somehow the breaks you *swore* you'd take never actually happen. That itch is exactly what **EagleEye** was built to scratch - a small cross-platform utility that lives quietly in your system tray and nudges you back toward healthier eyes without getting in the way. Most of what's already out there feels dated or half-abandoned: clunky enterprise suites on one end, forgotten pet projects without proper cross-platform support, idle tracking, or a modern UI on the other.
 
-Приложение напоминает о коротких паузах, показывает оверлей с анимированным соколом и предлагает простые упражнения: посмотреть влево-вправо, вверх-вниз, поморгать или перевести взгляд вдаль. По личному опыту автора, такой режим помог работать примерно на **20% дольше без дискомфорта в глазах** и чаще делать мини-зарядку днем.
+The app reminds you to take short breaks, pops up an overlay with an animated falcon, and suggests simple exercises: look left and right, up and down, blink a few times, or focus on something in the distance. In the author's own experience, running this kind of rhythm lets you work **roughly 20% longer without eye strain** and makes mid-day micro-stretches something you actually do.
 
-| До EagleEye | После EagleEye |
+| Before EagleEye | After EagleEye |
 | --- | --- |
-| Работа идет часами без пауз | Перерывы появляются по расписанию |
-| Глаза устают, но отвлечься забываешь | Оверлей явно напоминает, что пора дать глазам отдых |
-| Зарядка для глаз остается "на потом" | Сокол показывает конкретное упражнение |
-| Нет единого управления перерывами | Все управляется из системного трея |
+| Hours of work with zero pauses | Breaks land on a predictable schedule |
+| Eyes hurt, but "take a break" never registers | The overlay makes it crystal clear it's time to rest |
+| Eye exercises stay in the "someday" pile | The falcon walks you through a specific exercise |
+| No single place to manage breaks | Everything lives in the system tray |
 
-### Сравнение до и после
+### Before and after
 
-![Сравнение комфорта работы до и после EagleEye](resources/Designs/EyeHealthComparison.gif)
+![Working comfort before and after EagleEye](resources/Designs/EyeHealthComparison.gif)
 
-> Важно: EagleEye не является медицинским продуктом и не заменяет рекомендации врача. Это практичная утилита для регулярных пауз и снижения бытовой нагрузки от долгой работы за экраном.
+> Heads up: EagleEye isn't a medical product and doesn't replace a doctor's advice. It's a practical utility for taking regular breaks and easing the everyday load that comes from long hours at a screen.
 
-## Почему EagleEye полезен
+## Why EagleEye is worth having
 
-- **Короткие перерывы:** по умолчанию каждые 15 минут на 15 секунд.
-- **Длинные перерывы:** по умолчанию каждые 50 минут на 5 минут.
-- **Анимированный оверлей:** сокол показывает упражнение и таймер оставшегося отдыха.
-- **Strict mode:** режим без быстрого пропуска, если нужно дисциплинированно соблюдать отдых.
-- **Idle tracking:** удобная автоматизация - не нужно вручную ставить таймер на паузу, когда отходишь от ПК. Иначе получается неприятность: только сел за комп - и сразу прилетает разминка. EagleEye сам видит, что пользователя не было 5+ минут, считает это отдыхом и запускает отсчет заново.
-- **Системный трей:** статус, пауза, принудительный следующий перерыв, длинный перерыв, временное отключение напоминаний и выход.
-- **Автозапуск:** поддержка Windows Registry Run Key, Linux autostart desktop entry и macOS LaunchAgent.
-- **Локальные настройки:** YAML-файл в стандартной пользовательской config-директории ОС.
-- **RU/EN локализация:** язык можно переключить в окне настроек.
+- **Short breaks:** every 15 minutes for 15 seconds by default.
+- **Long breaks:** every 50 minutes for 5 minutes by default.
+- **Animated overlay:** the falcon shows you the exercise and a countdown of the time left.
+- **Strict mode:** no quick skips - for when you want to actually stick with your breaks instead of snoozing them away.
+- **Idle tracking:** a convenient bit of automation - no need to manually pause the timer every time you step away. Otherwise you get the classic annoyance: you sit back down at the computer and *boom*, instant break prompt. EagleEye notices on its own that you've been gone for 5+ minutes, counts that as rest, and restarts the countdown.
+- **System tray:** status, pause, force the next break, force a long break, snooze reminders for a bit, and quit.
+- **Auto-start:** Windows Registry Run Key, Linux autostart desktop entries, and macOS LaunchAgent are all supported.
+- **Local settings:** a YAML file in your OS's standard user config directory.
+- **RU / EN localization:** swap the language from the preferences window.
 
-## Основные сценарии
+## How people actually use it
 
-**Обычный рабочий день:** запустил приложение, нажал Start, свернул настройки и работаешь дальше. EagleEye остается в трее и показывает, сколько осталось до следующего перерыва.
+**A normal workday:** launch the app, hit Start, close the preferences window, and get back to work. EagleEye stays in the tray and shows how much time is left until the next break.
 
-**Короткая разминка:** когда наступает короткий перерыв, появляется компактный или полноэкранный оверлей с упражнением для глаз и обратным отсчетом.
+**A quick stretch:** when a short break hits, a compact or fullscreen overlay pops up with an eye exercise and a countdown.
 
-**Длинный отдых:** после более длинного рабочего отрезка приложение предлагает расслабить взгляд и посмотреть вдаль.
+**A longer rest:** after a longer stretch of work, the app suggests relaxing your gaze and looking off into the distance.
 
-**Контроль из трея:** можно поставить таймер на паузу, отключить напоминания на 5/15/30/60 минут, начать следующий перерыв сразу или открыть настройки.
+**Tray-level control:** pause the timer, snooze reminders for 5 / 15 / 30 / 60 minutes, trigger the next break immediately, or open preferences.
 
-## Принципы проекта
+## Design principles
 
-- **Set and forget:** приложение должно помогать в фоне, а не становиться еще одним источником шума.
-- **Локальность:** без серверов, баз данных и внешних аккаунтов.
-- **Тестируемое ядро:** расписание перерывов отделено от GUI.
-- **Кроссплатформенность:** platform-specific код изолирован в отдельных файлах с build tags.
-- **Безопасные настройки:** конфигурация и служебные файлы хранятся в пользовательской config-директории с ограниченными правами (Windows: `%AppData%\EagleEye\settings.yaml`, Linux: `~/.config/EagleEye/settings.yaml` или `$XDG_CONFIG_HOME/EagleEye/settings.yaml`, macOS: `~/Library/Application Support/EagleEye/settings.yaml`).
+- **Set and forget:** the app should help in the background, not turn into one more source of noise.
+- **Stays local:** no servers, no databases, no external accounts.
+- **Testable core:** break scheduling is kept separate from the GUI.
+- **Truly cross-platform:** platform-specific code is isolated in dedicated files with build tags.
+- **Safe by default:** config and supporting files live in the user's config directory with restricted permissions (Windows: `%AppData%\EagleEye\settings.yaml`, Linux: `~/.config/EagleEye/settings.yaml` or `$XDG_CONFIG_HOME/EagleEye/settings.yaml`, macOS: `~/Library/Application Support/EagleEye/settings.yaml`).
 
-## Технические детали
+## Under the hood
 
-EagleEye написан на Go и Fyne. Внутри используется чистая state machine для расписания перерывов, а UI и платформенные интеграции вынесены в отдельные слои.
+EagleEye is written in Go with Fyne. A clean state machine drives the break schedule, and the UI plus platform integrations sit in their own dedicated layers.
 
-- **`cmd/main.go`** - тонкая точка входа, которая вызывает `internal/app.Run`.
-- **`internal/app`** - runtime orchestration: связывает настройки, таймер, tray, overlay, анимации и платформенные сервисы.
-- **`internal/core/timekeeper`** - состояние рабочего времени, коротких/длинных перерывов, паузы и progress-событий.
-- **`internal/ui/preferences`** - окно настроек Fyne.
-- **`internal/ui/tray`** - системный tray-менеджер и команды управления.
-- **`internal/ui/overlay`** - окно перерыва с таймером, прозрачностью, fullscreen-режимом и topmost-поведением.
-- **`internal/ui/animation`** - логика смены sprites для упражнений.
-- **`internal/storage`** - загрузка и сохранение `settings.yaml`.
-- **`internal/platform`** - single instance, autostart и idle detection для разных ОС.
-- **`resources`** - встроенные логотипы и sprites через Go `embed`.
+- **`cmd/main.go`** - a thin entry point that just calls `internal/app.Run`.
+- **`internal/app`** - runtime orchestration: wires together settings, the timer, tray, overlay, animations, and platform services.
+- **`internal/core/timekeeper`** - the state for work time, short/long breaks, pauses, and progress events.
+- **`internal/ui/preferences`** - the Fyne preferences window.
+- **`internal/ui/tray`** - the system tray manager and control commands.
+- **`internal/ui/overlay`** - the break window with the timer, opacity, fullscreen mode, and topmost behavior.
+- **`internal/ui/animation`** - the sprite-swapping logic for exercises.
+- **`internal/storage`** - load and save `settings.yaml`.
+- **`internal/platform`** - single-instance, autostart, and idle detection across OSes.
+- **`resources`** - embedded logos and sprites via Go's `embed`.
 
-## Архитектура приложения
+## Application architecture
 
 ```mermaid
 flowchart TD
@@ -125,99 +125,98 @@ flowchart TD
     Model --> Keeper
 ```
 
-## Пользовательский сценарий
+## User flow
 
 ```mermaid
 flowchart TD
-    Start(["Пользователь запускает EagleEye"]) --> Single{"Уже запущен другой экземпляр?"}
-    Single -->|"Да"| Activate["Активировать существующее окно настроек"]
-    Single -->|"Нет"| Load["Загрузить settings.yaml<br/>или взять значения по умолчанию"]
+    Start(["User launches EagleEye"]) --> Single{"Another instance already running?"}
+    Single -->|"Yes"| Activate["Activate the existing preferences window"]
+    Single -->|"No"| Load["Load settings.yaml<br/>or fall back to defaults"]
 
-    Load --> First{"Таймер должен стартовать сразу?"}
-    First -->|"Первый запуск / ручной старт"| Prefs["Окно настроек"]
-    First -->|"Автозапуск и таймер был включен"| Background["Работа в фоне через трей"]
+    Load --> First{"Should the timer start right away?"}
+    First -->|"First launch / manual start"| Prefs["Preferences window"]
+    First -->|"Auto-start and timer was on"| Background["Runs in the background via tray"]
 
-    Prefs --> Save["Сохранить настройки"]
-    Save --> StartTimer["Старт TimeKeeper"]
+    Prefs --> Save["Save settings"]
+    Save --> StartTimer["Start TimeKeeper"]
     StartTimer --> Background
 
-    Background --> Work["Пользователь работает за экраном"]
-    Work --> Idle{"Пользователь отошел на 5+ минут?"}
-    Idle -->|"Да"| Reset["Сбросить отсчет до перерыва"]
-    Idle -->|"Нет"| NextBreak{"Какой перерыв наступил?"}
+    Background --> Work["User is working at the screen"]
+    Work --> Idle{"User away for 5+ minutes?"}
+    Idle -->|"Yes"| Reset["Reset the countdown to the next break"]
+    Idle -->|"No"| NextBreak{"Which break is due?"}
     Reset --> Work
 
-    NextBreak -->|"Короткий"| Short["Оверлей с упражнением<br/>влево-вправо / вверх-вниз / мигание"]
-    NextBreak -->|"Длинный"| Long["Оверлей с отдыхом<br/>посмотреть вдаль"]
+    NextBreak -->|"Short"| Short["Overlay with an exercise<br/>left-right / up-down / blinking"]
+    NextBreak -->|"Long"| Long["Overlay with a rest prompt<br/>look off into the distance"]
 
-    Short --> Strict{"Strict mode включен?"}
+    Short --> Strict{"Strict mode on?"}
     Long --> Strict
-    Strict -->|"Да"| NoSkip["Кнопка Skip скрыта<br/>перерыв нужно пройти"]
-    Strict -->|"Нет"| CanSkip["Можно пропустить через Skip"]
+    Strict -->|"Yes"| NoSkip["Skip button is hidden<br/>the break has to run its course"]
+    Strict -->|"No"| CanSkip["Can be skipped via Skip"]
 
-    NoSkip --> Done["Перерыв завершен"]
+    NoSkip --> Done["Break is over"]
     CanSkip --> Done
     Done --> Work
 
-    Background --> TrayActions{"Действие в трее"}
-    TrayActions -->|"Pause / Resume"| Pause["Пауза или продолжение таймера"]
+    Background --> TrayActions{"Tray action"}
+    TrayActions -->|"Pause / Resume"| Pause["Pause or resume the timer"]
     TrayActions -->|"Start next break now"| Short
     TrayActions -->|"Take long break now"| Long
-    TrayActions -->|"Disable breaks for..."| Delay["Пауза на 5 / 15 / 30 / 60 минут"]
+    TrayActions -->|"Disable breaks for..."| Delay["Snooze for 5 / 15 / 30 / 60 minutes"]
     TrayActions -->|"Preferences"| Prefs
-    TrayActions -->|"Quit"| End(["Выход"])
+    TrayActions -->|"Quit"| End(["Exit"])
 
     Pause --> Work
     Delay --> Work
 ```
 
-## Установка
+## Install
 
-Самый простой способ — скачать готовый бинарник со страницы релизов. Никаких Go, компиляторов и зависимостей ставить не нужно.
+The simplest path is to grab a prebuilt binary from the Releases page. No Go, no compilers, no dependencies to install.
 
-**➡️ [Скачать последний релиз с GitHub Releases](https://github.com/DrNeuralDog/EagleEye/releases/latest)**
+**➡️ [Download the latest release from GitHub Releases](https://github.com/DrNeuralDog/EagleEye/releases/latest)**
 
-| ОС | Файл | Что делать после скачивания |
+| OS | File | What to do after downloading |
 | --- | --- | --- |
-| **Windows x64** | `EagleEye_windows_amd64.zip` | Распаковать, запустить `EagleEye.exe`. При первом запуске Windows SmartScreen может показать предупреждение «Windows protected your PC» — нажать **More info → Run anyway** (приложение не подписано code-signing сертификатом, это нормально для open source). |
-| **Linux x64** | `EagleEye_linux_amd64.tar.gz` | `tar -xzf EagleEye_linux_amd64.tar.gz && ./eagleeye`. Нужны системные библиотеки OpenGL: `sudo apt install libgl1 libxxf86vm1` (Debian/Ubuntu). |
-| **macOS Intel** | `EagleEye_darwin_amd64.tar.gz` | `tar -xzf EagleEye_darwin_amd64.tar.gz && ./EagleEye`. Если Gatekeeper ругается — ПКМ по бинарнику → **Открыть** → подтвердить. |
-| **macOS Apple Silicon (M1/M2/M3)** | `EagleEye_darwin_arm64.tar.gz` | Аналогично Intel-версии. |
+| **Windows x64** | `EagleEye_windows_amd64.zip` | Extract it and run `EagleEye.exe`. On first launch Windows SmartScreen may throw a "Windows protected your PC" warning - click **More info → Run anyway** (the app isn't code-signed, which is normal for open source). |
+| **Linux x64** | `EagleEye_linux_amd64.tar.gz` | `tar -xzf EagleEye_linux_amd64.tar.gz && ./eagleeye`. You'll need the OpenGL system libraries: `sudo apt install libgl1 libxxf86vm1` (Debian/Ubuntu). |
+| **macOS Apple Silicon (M1/M2/M3)** | `EagleEye_darwin_arm64.tar.gz` | `tar -xzf EagleEye_darwin_arm64.tar.gz && ./EagleEye`. If Gatekeeper complains, right-click the binary → **Open** → confirm. Intel Macs can run this build transparently via Rosetta 2. |
 
-Файл `checksums.txt` в том же релизе содержит SHA-256 каждого архива — можно проверить целостность через `sha256sum -c checksums.txt` (Linux/macOS) или `Get-FileHash` (Windows PowerShell).
+The `checksums.txt` file in the same release contains a SHA-256 for each archive - verify integrity with `sha256sum -c checksums.txt` (Linux/macOS) or `Get-FileHash` (Windows PowerShell).
 
-Если нужно собрать из исходников вручную — см. раздел «Сборка» ниже.
+If you'd rather build from source by hand, see the **Build** section below.
 
-## Сборка
+## Build
 
-### Требования
+### Requirements
 
 - Go 1.21+
 - Fyne v2.7+
-- Для Linux: системные зависимости Fyne/OpenGL, например `libgl1-mesa-dev` и `xorg-dev`
-- Для Windows-сборки с иконкой: PowerShell и `rsrc.exe` (скрипт может установить его при запуске с `-AllowGoNetwork`)
+- On Linux: Fyne/OpenGL system dependencies, for example `libgl1-mesa-dev` and `xorg-dev`
+- For Windows builds with an embedded icon: PowerShell and `rsrc.exe` (the script can install it on first run with `-AllowGoNetwork`)
 
 ### Windows
 
 ```powershell
-# Обычная сборка
+# Plain build
 go mod tidy
 go build -o bin/EagleEye.exe ./cmd
 
-# Сборка Windows GUI exe с иконкой
+# Windows GUI exe with an embedded icon
 powershell -ExecutionPolicy Bypass -File .\build_with_icon.ps1
 
-# Если rsrc.exe еще не установлен
+# If rsrc.exe isn't installed yet
 powershell -ExecutionPolicy Bypass -File .\build_with_icon.ps1 -AllowGoNetwork
 
-# Запуск
+# Run it
 .\bin\EagleEye.exe
 ```
 
 ### Linux
 
 ```bash
-# Пример для Debian/Ubuntu
+# Example for Debian/Ubuntu
 sudo apt install libgl1-mesa-dev xorg-dev
 
 go mod tidy
@@ -233,7 +232,7 @@ go build -o bin/EagleEye ./cmd
 ./bin/EagleEye
 ```
 
-### Кроссплатформенная сборка
+### Cross-platform builds
 
 ```bash
 # Windows
@@ -246,44 +245,44 @@ GOOS=linux GOARCH=amd64 go build -o bin/eagleeye-linux ./cmd
 GOOS=darwin GOARCH=amd64 go build -o bin/eagleeye-macos ./cmd
 ```
 
-### Релизный пайплайн
+### Release pipeline
 
-CI-пайплайн `.github/workflows/release.yml` собирает бинарники под Windows / Linux / macOS (Intel + Apple Silicon) на нативных GitHub-раннерах, генерирует `checksums.txt` и публикует в GitHub Releases автоматически при пуше git-тега вида `v*` (например, `v0.1.0`). Локально для быстрой snapshot-проверки можно использовать GoReleaser:
+The CI pipeline in `.github/workflows/release.yml` builds binaries for Windows, Linux, and macOS (Apple Silicon) on native GitHub runners, generates `checksums.txt`, and publishes them to GitHub Releases automatically whenever a git tag matching `v*` is pushed (for example, `v0.1.0`). For a quick local snapshot check you can use GoReleaser:
 
 ```bash
-# Snapshot-сборка текущей платформы (без публикации)
+# Snapshot build for the current platform (no publishing)
 goreleaser build --snapshot --clean --single-target
 ```
 
-## Проверка
+## Verification
 
 ```bash
-# Все тесты
+# Full test suite
 go test ./...
 
-# Статическая проверка стандартным Go-инструментом
+# Static analysis with the standard Go tool
 go vet ./...
 
-# Проверка сборки
+# Build check
 go build ./cmd/...
 
-# Если установлен golangci-lint
+# If golangci-lint is installed
 golangci-lint run ./...
 ```
 
-## Планы дальнейшего развития
+## Roadmap
 
-EagleEye задумывался как простая утилита для глаз, но направление движения шире - превратить его в удобную персональную платформу для цифрового здоровья и продуктивности.
+EagleEye started out as a simple eye-care utility, but the bigger picture is to grow it into a convenient personal platform for digital health and productivity.
 
-- **Мобильные версии:** порт на Android и iOS, чтобы напоминания о зарядке для глаз и перерывах работали и вне десктопа.
-- **Платформа для мониторинга здоровья:** расширение от "таймера перерывов" до полноценного трекера цифрового благополучия - осанка, количество активного экранного времени, баланс работы и отдыха.
-- **Тесты усталости глаз:** короткие встроенные проверки зрения и фокусировки (контрастность, острота, аккомодация), чтобы пользователь мог видеть динамику.
-- **Тесты умственной усталости:** простые когнитивные мини-задания (reaction time, рабочая память, внимание), по которым можно отследить, когда пора закругляться.
-- **Трекеры поведения:** сколько разминок за день было выполнено, а сколько скипнуто, статистика по дням и неделям, тренды.
-- **Социальные интеграции:** возможность делиться прогрессом с друзьями и коллегами - меньше усталости глаз, больше успешных разминок, более ровный рабочий график.
-- **Экспорт данных:** выгрузка локальной статистики в CSV/JSON для тех, кто хочет анализировать себя вручную или интегрировать с другими health-трекерами.
+- **Mobile apps:** ports to Android and iOS, so eye-stretch and break reminders follow you beyond the desktop.
+- **Digital health platform:** expanding from "break timer" to a proper digital-wellbeing tracker - posture, active screen time, and the balance between work and rest.
+- **Eye-fatigue tests:** short built-in checks for vision and focus (contrast sensitivity, acuity, accommodation) so users can watch their own trends over time.
+- **Cognitive-fatigue tests:** simple cognitive mini-tasks (reaction time, working memory, attention) that hint when it's time to wrap up for the day.
+- **Behavior tracking:** how many stretches you actually completed today versus skipped, stats by day and week, long-term trends.
+- **Social integrations:** share progress with friends and coworkers - less eye strain, more completed stretches, a steadier workday.
+- **Data export:** dump local stats to CSV/JSON for people who want to analyze themselves by hand or plug into other health trackers.
 
-## Связаться 📫
+## Get in touch 📫
 
 Email: neural_dog@proton.me
 
