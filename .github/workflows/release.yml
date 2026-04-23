@@ -26,9 +26,6 @@ jobs:
           - target: linux-amd64
             os: ubuntu-latest
             artifact: EagleEye_linux_amd64.tar.gz
-          - target: darwin-amd64
-            os: macos-13
-            artifact: EagleEye_darwin_amd64.tar.gz
           - target: darwin-arm64
             os: macos-14
             artifact: EagleEye_darwin_arm64.tar.gz
