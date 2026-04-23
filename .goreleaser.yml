@@ -1,0 +1,99 @@
+# GoReleaser config for EagleEye.
+#
+# Primary CI path is the matrix workflow in .github/workflows/release.yml,
+# because Fyne requires CGO and native windowing libs per OS. This file is
+# kept for local snapshot builds and future migration:
+#
+#   # Test a build locally without publishing (native OS only):
+#   goreleaser build --snapshot --clean --single-target
+#
+#   # Dry-run a full release (requires cross-compilers installed):
+#   goreleaser release --snapshot --clean
+#
+# Cross-compiling CGO Fyne builds from a single host is non-trivial. If you
+# want to migrate CI to pure GoReleaser, consider fyne-cross or a matrix of
+# native runners invoking `goreleaser build --single-target`.
+
+version: 2
+project_name: eagleeye
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: eagleeye-linux
+    main: ./cmd
+    binary: eagleeye
+    env:
+      - CGO_ENABLED=1
+    goos: [linux]
+    goarch: [amd64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+  - id: eagleeye-windows
+    main: ./cmd
+    binary: EagleEye
+    env:
+      - CGO_ENABLED=1
+    goos: [windows]
+    goarch: [amd64]
+    flags:
+      - -trimpath
+      - -buildvcs=false
+    ldflags:
+      - -s -w
+      - -H=windowsgui
+    # Icon embedding is handled by build_with_icon.ps1 in the Actions workflow.
+    # For goreleaser-native icon embedding, pre-generate a .syso via rsrc here.
+
+  - id: eagleeye-darwin
+    main: ./cmd
+    binary: EagleEye
+    env:
+      - CGO_ENABLED=1
+    goos: [darwin]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+archives:
+  - id: default
+    ids:
+      - eagleeye-linux
+      - eagleeye-windows
+      - eagleeye-darwin
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE*
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+      - "^test:"
+      - "Merge pull request"
+
+release:
+  draft: false
+  prerelease: auto
+  name_template: "{{ .Tag }}"
