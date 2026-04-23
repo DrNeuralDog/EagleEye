@@ -50,6 +50,7 @@
 
 # Fortran module files
 *.mod
+!go.mod
 
 # Compiled Static libraries
 *.lai
@@ -97,6 +98,7 @@ install_manifest.txt
 *.qbs.user
 *.qbs.user.*
 *.moc
+!go.mod
 moc_*.cpp
 qrc_*.cpp
 ui_*.h
