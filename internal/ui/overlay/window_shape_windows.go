@@ -32,7 +32,7 @@ func (overlay *Window) applyNativeShape(cornerRadius int32) {
 
 	if cornerRadius <= 0 {
 		// NULL region removes any prior clipping.
-		procSetWindowRgn.Call(hwnd, 0, 1)
+		_, _, _ = procSetWindowRgn.Call(hwnd, 0, 1)
 		return
 	}
 
@@ -63,6 +63,6 @@ func (overlay *Window) applyNativeShape(cornerRadius int32) {
 	// GDI leak across retries.
 	setRet, _, _ := procSetWindowRgn.Call(hwnd, rgn, 1)
 	if setRet == 0 {
-		procDeleteObject.Call(rgn)
+		_, _, _ = procDeleteObject.Call(rgn)
 	}
 }

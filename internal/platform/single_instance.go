@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -72,24 +73,40 @@ func (guard *InstanceGuard) Address() string {
 	return guard.address
 }
 
-// ListenForActivation handles second-instance activation pings.
-func (guard *InstanceGuard) ListenForActivation(onActivate func()) {
+// ListenForActivation handles second-instance activation pings until ctx is
+// canceled or the guard is released.
+func (guard *InstanceGuard) ListenForActivation(ctx context.Context, onActivate func()) {
 	if guard == nil || guard.listener == nil {
 		return
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	go func() {
+		<-ctx.Done()
+		_ = guard.listener.Close()
+	}()
 	go func() {
 		for {
 			conn, err := guard.listener.Accept()
 			if err != nil {
-				if errors.Is(err, net.ErrClosed) {
+				if errors.Is(err, net.ErrClosed) || ctx.Err() != nil {
 					return
 				}
 				continue
 			}
 
-			_ = conn.SetReadDeadline(time.Now().Add(activationReadTimeout))
-			message, _ := io.ReadAll(io.LimitReader(conn, maxActivationMessageSize+1))
-			_ = conn.Close()
+			if err := conn.SetReadDeadline(time.Now().Add(activationReadTimeout)); err != nil {
+				_ = conn.Close()
+				continue
+			}
+			message, err := io.ReadAll(io.LimitReader(conn, maxActivationMessageSize+1))
+			if closeErr := conn.Close(); closeErr != nil {
+				continue
+			}
+			if err != nil {
+				continue
+			}
 
 			if onActivate != nil && guard.isValidActivationMessage(message) && guard.allowActivation() {
 				onActivate()
@@ -207,7 +224,7 @@ func buildActivationMessage(secret []byte) ([]byte, error) {
 	return []byte(message), nil
 }
 
-func isValidActivationMessage(message []byte, secret []byte) bool {
+func isValidActivationMessage(message, secret []byte) bool {
 	parts := strings.Split(strings.TrimSpace(string(message)), ":")
 	if len(parts) != 3 || parts[0] != activationMessagePrefix {
 		return false

@@ -17,7 +17,7 @@ type idleProvider struct {
 
 type unsupportedIdleProvider struct{}
 
-func newIdleProvider() IdleProvider {
+func newIdleProvider() timekeeper.IdleChecker {
 	path, ok := findAllowedExecutable("xprintidle", linuxExecutableSearchDirs)
 	if !ok {
 		return unsupportedIdleProvider{}

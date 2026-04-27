@@ -1,7 +1,6 @@
 package overlay
 
 import (
-	"math"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -37,15 +36,18 @@ func TestCalculateOverlayCardSizeCapsByScreen(t *testing.T) {
 	assertSizeEquals(t, got, want)
 }
 
-func TestSpriteScaleForOversizedDirectionalSprites(t *testing.T) {
+func TestSpriteScaleUsesIdentityForFalconSprites(t *testing.T) {
 	tests := []struct {
 		name string
 		want float32
 	}{
-		{name: "sprites/Falcon looks down.png", want: oversizedSpriteScale},
-		{name: "sprites/Falcon looks left.png", want: oversizedSpriteScale},
+		{name: "sprites/Falcon looks down.png", want: 1},
+		{name: "sprites/Falcon looks left.png", want: 1},
+		{name: "sprites/Falcon looks down - background on.png", want: 1},
+		{name: "sprites/Falcon looks left 2.png", want: 1},
 		{name: "sprites/Falcon looks right.png", want: 1},
 		{name: "sprites/Falcon looks straight ahead.png", want: 1},
+		{name: "sprites/Falcon looks up.png", want: 1},
 	}
 
 	for _, tt := range tests {
@@ -61,22 +63,22 @@ func TestSpriteScaleForOversizedDirectionalSprites(t *testing.T) {
 	}
 }
 
-func TestSpriteTransformForOversizedDirectionalSprites(t *testing.T) {
+func TestSpriteTransformUsesIdentityForFalconSprites(t *testing.T) {
 	resource := fyne.NewStaticResource("sprites/Falcon looks down.png", nil)
 
 	got := spriteTransformForResource(resource)
 
-	if got.scaleY != oversizedSpriteScale {
-		t.Fatalf("unexpected sprite height scale: got=%v want=%v", got.scaleY, oversizedSpriteScale)
+	if got.scaleY != 1 {
+		t.Fatalf("unexpected sprite height scale: got=%v want=1", got.scaleY)
 	}
-	if got.scaleX != oversizedSpriteWidth {
-		t.Fatalf("unexpected sprite width scale: got=%v want=%v", got.scaleX, oversizedSpriteWidth)
+	if got.scaleX != 1 {
+		t.Fatalf("unexpected sprite width scale: got=%v want=1", got.scaleX)
 	}
-	if got.offsetYFraction != oversizedSpriteOffsetY {
-		t.Fatalf("unexpected sprite y offset: got=%v want=%v", got.offsetYFraction, oversizedSpriteOffsetY)
+	if got.offsetYFraction != 0 {
+		t.Fatalf("unexpected sprite y offset: got=%v want=0", got.offsetYFraction)
 	}
-	if !got.stretch {
-		t.Fatal("expected oversized directional sprite to use stretch fill")
+	if got.stretch {
+		t.Fatal("expected Falcon sprite to use contain fill")
 	}
 }
 
@@ -95,31 +97,22 @@ func TestRightPanelLayoutKeepsClearanceUnderSkip(t *testing.T) {
 	}
 }
 
-func TestRightPanelLayoutAppliesDirectionalSpriteOffsetAndWidth(t *testing.T) {
+func TestRightPanelLayoutKeepsDirectionalSpritesAtDefaultSize(t *testing.T) {
 	defaultImage := newFixedCanvasObject(fyne.NewSize(0, 0))
 	defaultSkip := newFixedCanvasObject(fyne.NewSize(50, 30))
 	defaultLayout := &rightPanelLayout{}
 	panelSize := fyne.NewSize(160, 200)
 	defaultLayout.Layout([]fyne.CanvasObject{defaultImage, defaultSkip}, panelSize)
 
-	scaledImage := newFixedCanvasObject(fyne.NewSize(0, 0))
-	scaledSkip := newFixedCanvasObject(fyne.NewSize(50, 30))
-	scaledLayout := &rightPanelLayout{}
-	scaledLayout.SetSpriteTransform(spriteTransformForResource(fyne.NewStaticResource("sprites/Falcon looks left.png", nil)))
-	scaledLayout.Layout([]fyne.CanvasObject{scaledImage, scaledSkip}, panelSize)
+	leftImage := newFixedCanvasObject(fyne.NewSize(0, 0))
+	leftSkip := newFixedCanvasObject(fyne.NewSize(50, 30))
+	leftLayout := &rightPanelLayout{}
+	leftLayout.SetSpriteTransform(spriteTransformForResource(fyne.NewStaticResource("sprites/Falcon looks left.png", nil)))
+	leftLayout.Layout([]fyne.CanvasObject{leftImage, leftSkip}, panelSize)
 
-	if scaledImage.Size().Height >= defaultImage.Size().Height {
-		t.Fatalf("scaled sprite was not reduced: got=%v default=%v", scaledImage.Size().Height, defaultImage.Size().Height)
-	}
-	if scaledImage.Size().Width <= scaledImage.Size().Height {
-		t.Fatalf("scaled sprite was not widened: got width=%v height=%v", scaledImage.Size().Width, scaledImage.Size().Height)
-	}
-	wantWidth := scaledImage.Size().Height * oversizedSpriteWidth
-	if math.Abs(float64(scaledImage.Size().Width-wantWidth)) > 0.01 {
-		t.Fatalf("unexpected scaled sprite width: got=%v want=%v", scaledImage.Size().Width, wantWidth)
-	}
-	if scaledImage.Position().Y <= defaultImage.Position().Y {
-		t.Fatalf("scaled sprite was not moved lower: got y=%v default y=%v", scaledImage.Position().Y, defaultImage.Position().Y)
+	assertSizeEquals(t, leftImage.Size(), defaultImage.Size())
+	if leftImage.Position() != defaultImage.Position() {
+		t.Fatalf("unexpected sprite position: got=%v want=%v", leftImage.Position(), defaultImage.Position())
 	}
 }
 
@@ -168,7 +161,7 @@ func (object *fixedCanvasObject) Visible() bool {
 
 func (object *fixedCanvasObject) Refresh() {}
 
-func assertSizeEquals(t *testing.T, got fyne.Size, want fyne.Size) {
+func assertSizeEquals(t *testing.T, got, want fyne.Size) {
 	t.Helper()
 	if got != want {
 		t.Fatalf("unexpected size: got=%v want=%v", got, want)

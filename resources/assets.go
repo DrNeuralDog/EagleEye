@@ -19,17 +19,47 @@ var spriteFS embed.FS
 //go:embed logo/*.png
 var logoFS embed.FS
 
-var spriteCache sync.Map
-var logoCache sync.Map
+// Cache loads and memoizes embedded Fyne resources.
+type Cache struct {
+	sprites sync.Map
+	logos   sync.Map
+}
+
+var defaultCache = NewCache()
+
+// NewCache creates an isolated resource cache.
+func NewCache() *Cache {
+	return &Cache{}
+}
 
 // Sprite returns a Fyne resource for the given sprite file.
 func Sprite(fileName string) (fyne.Resource, error) {
-	return loadResource(spriteFS, spriteDir+fileName, &spriteCache)
+	return defaultCache.Sprite(fileName)
 }
 
 // MustSprite returns a Fyne resource or panics on error.
 func MustSprite(fileName string) fyne.Resource {
-	resource, err := Sprite(fileName)
+	return defaultCache.MustSprite(fileName)
+}
+
+// Logo returns a Fyne resource for the given logo file.
+func Logo(fileName string) (fyne.Resource, error) {
+	return defaultCache.Logo(fileName)
+}
+
+// MustLogo returns a Fyne resource or panics on error.
+func MustLogo(fileName string) fyne.Resource {
+	return defaultCache.MustLogo(fileName)
+}
+
+// Sprite returns a Fyne resource for the given sprite file.
+func (cache *Cache) Sprite(fileName string) (fyne.Resource, error) {
+	return loadResource(spriteFS, spriteDir+fileName, &cache.sprites)
+}
+
+// MustSprite returns a Fyne resource or panics on error.
+func (cache *Cache) MustSprite(fileName string) fyne.Resource {
+	resource, err := cache.Sprite(fileName)
 	if err != nil {
 		panic(err)
 	}
@@ -37,13 +67,13 @@ func MustSprite(fileName string) fyne.Resource {
 }
 
 // Logo returns a Fyne resource for the given logo file.
-func Logo(fileName string) (fyne.Resource, error) {
-	return loadResource(logoFS, logoDir+fileName, &logoCache)
+func (cache *Cache) Logo(fileName string) (fyne.Resource, error) {
+	return loadResource(logoFS, logoDir+fileName, &cache.logos)
 }
 
 // MustLogo returns a Fyne resource or panics on error.
-func MustLogo(fileName string) fyne.Resource {
-	resource, err := Logo(fileName)
+func (cache *Cache) MustLogo(fileName string) fyne.Resource {
+	resource, err := cache.Logo(fileName)
 	if err != nil {
 		panic(err)
 	}

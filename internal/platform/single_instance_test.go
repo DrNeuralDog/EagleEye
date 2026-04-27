@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"net"
 	"runtime"
 	"strconv"
@@ -21,7 +22,7 @@ func TestSingleInstanceActivationRequiresValidMessage(t *testing.T) {
 	}()
 
 	activated := make(chan struct{}, 1)
-	guard.ListenForActivation(func() {
+	guard.ListenForActivation(context.Background(), func() {
 		activated <- struct{}{}
 	})
 
@@ -57,7 +58,7 @@ func TestSingleInstanceActivationIsDebounced(t *testing.T) {
 	}()
 
 	activated := make(chan struct{}, 3)
-	guard.ListenForActivation(func() {
+	guard.ListenForActivation(context.Background(), func() {
 		activated <- struct{}{}
 	})
 
@@ -79,6 +80,37 @@ func TestSingleInstanceActivationIsDebounced(t *testing.T) {
 	case <-activated:
 		t.Fatalf("activation was not debounced")
 	case <-time.After(150 * time.Millisecond):
+	}
+}
+
+func TestSingleInstanceActivationStopsWhenContextCanceled(t *testing.T) {
+	setPlatformUserConfigEnv(t, t.TempDir())
+
+	appName := "EagleEyeCancelTest" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	guard, err := AcquireSingleInstance(appName)
+	if err != nil {
+		t.Fatalf("AcquireSingleInstance() error = %v", err)
+	}
+	defer func() {
+		_ = guard.Release()
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	guard.ListenForActivation(ctx, nil)
+	cancel()
+
+	deadline := time.After(time.Second)
+	for {
+		replacement, err := AcquireSingleInstance(appName)
+		if err == nil {
+			_ = replacement.Release()
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("listener did not stop after context cancel")
+		case <-time.After(20 * time.Millisecond):
+		}
 	}
 }
 

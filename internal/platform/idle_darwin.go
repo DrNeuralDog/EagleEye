@@ -8,7 +8,7 @@ import (
 
 type idleProvider struct{}
 
-func newIdleProvider() IdleProvider {
+func newIdleProvider() timekeeper.IdleChecker {
 	return &idleProvider{}
 }
 

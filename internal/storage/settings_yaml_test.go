@@ -2,13 +2,12 @@ package storage
 
 import (
 	"bytes"
+	"eagleeye/internal/ui/preferences"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
-
-	"eagleeye/internal/ui/preferences"
 )
 
 func TestSaveLoadRunOnStartup(t *testing.T) {
@@ -163,6 +162,38 @@ func TestResolveLogPathUsesAppConfigDir(t *testing.T) {
 	}
 }
 
+func TestConfigPathEnvOverridesSettingsPathOnly(t *testing.T) {
+	configRoot := t.TempDir()
+	setUserConfigEnv(t, configRoot)
+	overridePath := filepath.Join(t.TempDir(), "custom-settings.yaml")
+	t.Setenv(configPathEnv, overridePath)
+
+	settings := preferences.DefaultSettings()
+	settings.BreakTimerStarted = true
+	if err := SaveSettings("EagleEyeEnvOverride", settings); err != nil {
+		t.Fatalf("SaveSettings() error = %v", err)
+	}
+
+	loaded, err := LoadSettings("EagleEyeEnvOverride")
+	if err != nil {
+		t.Fatalf("LoadSettings() error = %v", err)
+	}
+	if !loaded.BreakTimerStarted {
+		t.Fatalf("loaded BreakTimerStarted = false, want true")
+	}
+	if _, err := os.Stat(overridePath); err != nil {
+		t.Fatalf("Stat(overridePath) error = %v", err)
+	}
+
+	logPath, err := ResolveLogPath("EagleEyeEnvOverride")
+	if err != nil {
+		t.Fatalf("ResolveLogPath() error = %v", err)
+	}
+	if strings.Contains(logPath, filepath.Dir(overridePath)) {
+		t.Fatalf("ResolveLogPath() = %q, want app config dir independent of EAGLEEYE_CONFIG_PATH", logPath)
+	}
+}
+
 func TestLoadSettingsLegacyResetWithoutRunOnStartup(t *testing.T) {
 	configRoot := t.TempDir()
 	setUserConfigEnv(t, configRoot)
@@ -188,7 +219,7 @@ func TestLoadSettingsLegacyResetWithoutRunOnStartup(t *testing.T) {
 		"language: ru",
 		"",
 	}, "\n"))
-	if err := os.WriteFile(configPath, legacy, 0o644); err != nil {
+	if err := os.WriteFile(configPath, legacy, 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
