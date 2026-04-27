@@ -1,4 +1,4 @@
-<p align="left"><img src="resources/logo/Logo_Optimal_Gradient.png" alt="EagleEye Logo" height="320" width="480" /></p>
+<p align="left"><img src="resources/logo/Logo_Optimal_Gradient.png" alt="EagleEye Logo" width="360" /></p>
 
 [![Go](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://go.dev) [![Fyne](https://img.shields.io/badge/Fyne-2.7+-00ACD7.svg)](https://fyne.io) [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-brightgreen.svg)]()
 
