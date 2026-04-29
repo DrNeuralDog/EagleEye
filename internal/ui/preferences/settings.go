@@ -7,14 +7,15 @@ import (
 
 const idleCheckInterval = 20 * time.Second
 
-// Settings defines editable user preferences.
+// Settings defines editable user preferences
 type Settings struct {
 	ShortInterval time.Duration
 	ShortDuration time.Duration
 	LongInterval  time.Duration
 	LongDuration  time.Duration
-	StrictMode    bool
-	IdleEnabled   bool
+
+	StrictMode  bool
+	IdleEnabled bool
 
 	OverlayOpacity float64
 	Fullscreen     bool
@@ -24,23 +25,25 @@ type Settings struct {
 	BreakTimerStarted bool
 }
 
-// DefaultSettings returns default settings for EagleEye.
+// DefaultSettings returns default settings for EagleEye
 func DefaultSettings() Settings {
 	return Settings{
-		ShortInterval:  15 * time.Minute,
-		ShortDuration:  15 * time.Second,
-		LongInterval:   50 * time.Minute,
-		LongDuration:   5 * time.Minute,
+		ShortInterval: 15 * time.Minute,
+		ShortDuration: 15 * time.Second,
+		LongInterval:  50 * time.Minute,
+		LongDuration:  5 * time.Minute,
+
 		StrictMode:     false,
 		IdleEnabled:    true,
 		OverlayOpacity: 0.85,
 		Fullscreen:     false,
 		RunOnStartup:   true,
-		Language:       "en",
+
+		Language: "en",
 	}
 }
 
-// TimeKeeperConfig converts settings to TimeKeeperConfig.
+// TimeKeeperConfig converts settings to TimeKeeperConfig
 func (settings Settings) TimeKeeperConfig() model.TimeKeeperConfig {
 	return model.TimeKeeperConfig{
 		Short: model.BreakConfig{

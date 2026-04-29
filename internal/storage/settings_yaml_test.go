@@ -10,12 +10,14 @@ import (
 	"testing"
 )
 
+// TestSaveLoadRunOnStartup verifies both true and false autostart values survive YAML roundtrip
 func TestSaveLoadRunOnStartup(t *testing.T) {
 	configRoot := t.TempDir()
 	setUserConfigEnv(t, configRoot)
 
 	for _, expected := range []bool{true, false} {
 		expected := expected
+
 		t.Run(strings.ToLower("run_on_startup_"+boolString(expected)), func(t *testing.T) {
 			appName := "EagleEyeSaveLoad" + boolString(expected)
 			settings := preferences.DefaultSettings()
@@ -37,6 +39,7 @@ func TestSaveLoadRunOnStartup(t *testing.T) {
 	}
 }
 
+// TestSaveLoadBreakTimerStarted verifies persisted timer state is restored on load
 func TestSaveLoadBreakTimerStarted(t *testing.T) {
 	configRoot := t.TempDir()
 	setUserConfigEnv(t, configRoot)
@@ -58,18 +61,22 @@ func TestSaveLoadBreakTimerStarted(t *testing.T) {
 	}
 }
 
+// TestLoadSettingsWithoutBreakTimerStartedKeepsFalse covers configs created before timer state existed
 func TestLoadSettingsWithoutBreakTimerStartedKeepsFalse(t *testing.T) {
 	configRoot := t.TempDir()
 	setUserConfigEnv(t, configRoot)
 
 	appName := "EagleEyeMissingBreakTimerStarted"
 	configPath, err := resolveConfigPath(appName)
+
 	if err != nil {
 		t.Fatalf("resolveConfigPath() error = %v", err)
 	}
+
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
+
 	raw := []byte(strings.Join([]string{
 		"short_interval_minutes: 15",
 		"short_duration_seconds: 15",
@@ -83,6 +90,7 @@ func TestLoadSettingsWithoutBreakTimerStartedKeepsFalse(t *testing.T) {
 		"language: en",
 		"",
 	}, "\n"))
+
 	if err := os.WriteFile(configPath, raw, 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
@@ -97,6 +105,7 @@ func TestLoadSettingsWithoutBreakTimerStartedKeepsFalse(t *testing.T) {
 	}
 }
 
+// TestSaveSettingsUsesPrivateFileMode verifies saved settings are not world-readable
 func TestSaveSettingsUsesPrivateFileMode(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows ACLs are not represented reliably through os.FileMode permission bits")
@@ -114,15 +123,18 @@ func TestSaveSettingsUsesPrivateFileMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveConfigPath() error = %v", err)
 	}
+
 	info, err := os.Stat(configPath)
 	if err != nil {
 		t.Fatalf("Stat() error = %v", err)
 	}
+
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("settings mode = %o, want 0600", info.Mode().Perm())
 	}
 }
 
+// TestLoadSettingsRejectsOversizedFile guards against loading unexpectedly large configs
 func TestLoadSettingsRejectsOversizedFile(t *testing.T) {
 	configRoot := t.TempDir()
 	setUserConfigEnv(t, configRoot)
@@ -132,9 +144,11 @@ func TestLoadSettingsRejectsOversizedFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveConfigPath() error = %v", err)
 	}
+
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
+
 	oversized := bytes.Repeat([]byte("a"), maxSettingsFileSize+1)
 	if err := os.WriteFile(configPath, oversized, 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
@@ -147,6 +161,7 @@ func TestLoadSettingsRejectsOversizedFile(t *testing.T) {
 	}
 }
 
+// TestResolveLogPathUsesAppConfigDir verifies logs stay under the app config directory
 func TestResolveLogPathUsesAppConfigDir(t *testing.T) {
 	configRoot := t.TempDir()
 	setUserConfigEnv(t, configRoot)
@@ -162,6 +177,7 @@ func TestResolveLogPathUsesAppConfigDir(t *testing.T) {
 	}
 }
 
+// TestConfigPathEnvOverridesSettingsPathOnly verifies custom settings path does not move logs
 func TestConfigPathEnvOverridesSettingsPathOnly(t *testing.T) {
 	configRoot := t.TempDir()
 	setUserConfigEnv(t, configRoot)
@@ -170,6 +186,7 @@ func TestConfigPathEnvOverridesSettingsPathOnly(t *testing.T) {
 
 	settings := preferences.DefaultSettings()
 	settings.BreakTimerStarted = true
+
 	if err := SaveSettings("EagleEyeEnvOverride", settings); err != nil {
 		t.Fatalf("SaveSettings() error = %v", err)
 	}
@@ -178,9 +195,11 @@ func TestConfigPathEnvOverridesSettingsPathOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSettings() error = %v", err)
 	}
+
 	if !loaded.BreakTimerStarted {
 		t.Fatalf("loaded BreakTimerStarted = false, want true")
 	}
+
 	if _, err := os.Stat(overridePath); err != nil {
 		t.Fatalf("Stat(overridePath) error = %v", err)
 	}
@@ -189,20 +208,24 @@ func TestConfigPathEnvOverridesSettingsPathOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveLogPath() error = %v", err)
 	}
+
 	if strings.Contains(logPath, filepath.Dir(overridePath)) {
 		t.Fatalf("ResolveLogPath() = %q, want app config dir independent of EAGLEEYE_CONFIG_PATH", logPath)
 	}
 }
 
+// TestLoadSettingsLegacyResetWithoutRunOnStartup verifies old configs are replaced with defaults
 func TestLoadSettingsLegacyResetWithoutRunOnStartup(t *testing.T) {
 	configRoot := t.TempDir()
 	setUserConfigEnv(t, configRoot)
 
 	appName := "EagleEyeLegacyReset"
 	configPath, err := resolveConfigPath(appName)
+
 	if err != nil {
 		t.Fatalf("resolveConfigPath() error = %v", err)
 	}
+
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
@@ -219,6 +242,7 @@ func TestLoadSettingsLegacyResetWithoutRunOnStartup(t *testing.T) {
 		"language: ru",
 		"",
 	}, "\n"))
+
 	if err := os.WriteFile(configPath, legacy, 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
@@ -237,11 +261,13 @@ func TestLoadSettingsLegacyResetWithoutRunOnStartup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
+
 	if !strings.Contains(string(raw), "run_on_startup: true") {
 		t.Fatalf("reset config must contain run_on_startup: true, got:\n%s", string(raw))
 	}
 }
 
+// setUserConfigEnv isolates user config paths inside each test temp directory
 func setUserConfigEnv(t *testing.T, path string) {
 	t.Helper()
 
@@ -253,9 +279,11 @@ func setUserConfigEnv(t *testing.T, path string) {
 	}
 }
 
+// boolString keeps subtest and app names stable for boolean cases
 func boolString(value bool) string {
 	if value {
 		return "True"
 	}
+
 	return "False"
 }

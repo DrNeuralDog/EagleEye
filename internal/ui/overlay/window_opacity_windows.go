@@ -23,12 +23,14 @@ var (
 
 func (overlay *Window) applyNativeOpacity(alpha uint8) {
 	nativeWindow, ok := overlay.window.(driver.NativeWindow)
+
 	if !ok {
 		return
 	}
 
 	nativeWindow.RunNative(func(context any) {
 		hwnd := extractHWND(context)
+
 		if hwnd == 0 {
 			return
 		}
@@ -36,9 +38,11 @@ func (overlay *Window) applyNativeOpacity(alpha uint8) {
 		overlay.cachedHWND = hwnd
 
 		style, _, _ := procGetWindowLongPtrW.Call(hwnd, gwlExStyle)
+
 		if style&wsExLayered == 0 {
 			_, _, _ = procSetWindowLongPtrW.Call(hwnd, gwlExStyle, style|wsExLayered)
 		}
+
 		_, _, _ = procSetLayeredWindowAttributes.Call(hwnd, 0, uintptr(alpha), lwaAlpha)
 	})
 }

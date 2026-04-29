@@ -25,8 +25,10 @@ func normalizeSpriteTransform(transform spriteTransform) spriteTransform {
 	if transform.scaleX <= 0 {
 		transform.scaleX = 1
 	}
+
 	if transform.scaleY <= 0 {
 		transform.scaleY = 1
 	}
+
 	return transform
 }

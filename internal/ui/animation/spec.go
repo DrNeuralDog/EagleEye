@@ -1,8 +1,10 @@
 package animation
 
-import "time"
+import (
+	"time"
 
-import "fyne.io/fyne/v2"
+	"fyne.io/fyne/v2"
+)
 
 // ExerciseSpec defines the sprite set for a single exercise session.
 type ExerciseSpec struct {
@@ -24,6 +26,7 @@ func (spec ExerciseSpec) BlinkHoldDuration(longHold bool) time.Duration {
 	if longHold {
 		return 3 * time.Second
 	}
+
 	return time.Second
 }
 

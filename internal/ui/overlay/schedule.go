@@ -6,8 +6,8 @@ import (
 )
 
 // scheduleInitialFocus re-applies native attributes shortly after the
-// window appears, giving the OS time to finish compositing. This avoids
-// the brief transparent flash on first show.
+// window appears, giving the OS time to finish compositing - this avoids
+// the brief transparent flash on first show!
 func (overlay *Window) scheduleInitialFocus(ctx context.Context) {
 	go func() {
 		for _, delay := range []time.Duration{
@@ -18,14 +18,18 @@ func (overlay *Window) scheduleInitialFocus(ctx context.Context) {
 			if !sleepOverlaySchedule(ctx, delay) {
 				return
 			}
+
 			overlay.forceForeground()
 		}
 	}()
 }
 
+// scheduleTopmostKeep periodically restores the overlay topmost state for the
+// lifetime of the active break session.
 func (overlay *Window) scheduleTopmostKeep(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(250 * time.Millisecond)
+
 		defer ticker.Stop()
 
 		overlay.keepTopmost()
@@ -47,11 +51,12 @@ func (overlay *Window) nativeShapeRadius() int32 {
 	if overlay.config.Fullscreen {
 		return 0
 	}
+
 	return int32(overlayCardCornerRadius)
 }
 
 // scheduleNativeShape re-applies the rounded native window region a
-// few times with small delays after window.Show(). Retries are needed
+// few times with small delays after window.Show() - Retries are needed
 // because the HWND can take a moment to receive its final client size
 // via Windows message pumping, and because Fyne's initial layout may
 // trigger an additional resize that clears the region.
@@ -67,11 +72,14 @@ func (overlay *Window) scheduleNativeShape(ctx context.Context, radius int32) {
 			if !sleepOverlaySchedule(ctx, delay) {
 				return
 			}
+
 			overlay.applyNativeShape(radius)
 		}
 	}()
 }
 
+// sleepOverlaySchedule waits for a retry delay while still allowing the
+// scheduled overlay update to stop immediately when its context is cancelled
 func sleepOverlaySchedule(ctx context.Context, delay time.Duration) bool {
 	if delay <= 0 {
 		select {
@@ -81,8 +89,11 @@ func sleepOverlaySchedule(ctx context.Context, delay time.Duration) bool {
 			return true
 		}
 	}
+
 	timer := time.NewTimer(delay)
+
 	defer timer.Stop()
+
 	select {
 	case <-ctx.Done():
 		return false

@@ -21,6 +21,7 @@ func TestLevelFromEnv(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.value, func(t *testing.T) {
 			t.Setenv("EAGLEEYE_LOG_LEVEL", tt.value)
+
 			if got := LevelFromEnv(); got != tt.want {
 				t.Fatalf("LevelFromEnv() = %v, want %v", got, tt.want)
 			}

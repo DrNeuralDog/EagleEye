@@ -1,18 +1,12 @@
+#
 # GoReleaser config for EagleEye.
 #
-# Primary CI path is the matrix workflow in .github/workflows/release.yml,
-# because Fyne requires CGO and native windowing libs per OS. This file is
-# kept for local snapshot builds and future migration:
+# Kept for local snapshot builds and a possible future CI migration.
+# The actual release pipeline runs through GitHub Actions
+# (.github/workflows/release.yml), because Fyne requires CGO and native
+# OS windowing libraries, so release builds are currently done on native runners.
 #
-#   # Test a build locally without publishing (native OS only):
-#   goreleaser build --snapshot --clean --single-target
 #
-#   # Dry-run a full release (requires cross-compilers installed):
-#   goreleaser release --snapshot --clean
-#
-# Cross-compiling CGO Fyne builds from a single host is non-trivial. If you
-# want to migrate CI to pure GoReleaser, consider fyne-cross or a matrix of
-# native runners invoking `goreleaser build --single-target`.
 
 version: 2
 project_name: eagleeye
@@ -27,8 +21,8 @@ builds:
     binary: eagleeye
     env:
       - CGO_ENABLED=1
-    goos: [linux]
-    goarch: [amd64]
+    goos: [ linux ]
+    goarch: [ amd64 ]
     flags:
       - -trimpath
     ldflags:
@@ -39,8 +33,8 @@ builds:
     binary: EagleEye
     env:
       - CGO_ENABLED=1
-    goos: [windows]
-    goarch: [amd64]
+    goos: [ windows ]
+    goarch: [ amd64 ]
     flags:
       - -trimpath
       - -buildvcs=false
@@ -48,15 +42,16 @@ builds:
       - -s -w
       - -H=windowsgui
     # Icon embedding is handled by build_with_icon.ps1 in the Actions workflow.
-    # For goreleaser-native icon embedding, pre-generate a .syso via rsrc here.
+    #For goreleaser native icon embedding, pre-generate a .syso via rsrc here!
+
 
   - id: eagleeye-darwin
     main: ./cmd
     binary: EagleEye
     env:
       - CGO_ENABLED=1
-    goos: [darwin]
-    goarch: [amd64, arm64]
+    goos: [ darwin ]
+    goarch: [ amd64, arm64 ]
     flags:
       - -trimpath
     ldflags:

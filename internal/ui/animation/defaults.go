@@ -2,7 +2,7 @@ package animation
 
 import "time"
 
-// DefaultConfig returns LeoEye-inspired defaults.
+// DefaultConfig returns LeoEye inspired defaults
 func DefaultConfig() Config {
 	return Config{
 		InstructionDuration: 2 * time.Second,

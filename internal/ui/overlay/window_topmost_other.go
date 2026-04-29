@@ -2,6 +2,7 @@
 
 package overlay
 
+// applyNativeTopmost is a no-op on platforms without native topmost support!
 func (overlay *Window) applyNativeTopmost(enable bool) {
 	_ = enable
 }
