@@ -1,0 +1,123 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.1.0). Leave empty on tag push."
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: windows-amd64
+            os: windows-latest
+            artifact: EagleEye_windows_amd64.zip
+          - target: linux-amd64
+            os: ubuntu-latest
+            artifact: EagleEye_linux_amd64.tar.gz
+          - target: darwin-amd64
+            os: macos-13
+            artifact: EagleEye_darwin_amd64.tar.gz
+          - target: darwin-arm64
+            os: macos-14
+            artifact: EagleEye_darwin_arm64.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+          check-latest: true
+          cache: true
+
+      # -------- Linux --------
+      - name: Install Linux build deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-dev \
+            xorg-dev \
+            libxxf86vm-dev \
+            libxkbcommon-dev
+
+      - name: Build Linux binary
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          mkdir -p bin
+          go build -trimpath -ldflags "-s -w" -o bin/eagleeye ./cmd
+          cp README.md bin/README.md || true
+          tar -C bin -czf "${{ matrix.artifact }}" eagleeye README.md
+
+      # -------- macOS --------
+      - name: Build macOS binary
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          mkdir -p bin
+          go build -trimpath -ldflags "-s -w" -o bin/EagleEye ./cmd
+          cp README.md bin/README.md || true
+          tar -C bin -czf "${{ matrix.artifact }}" EagleEye README.md
+
+      # -------- Windows (icon embedded) --------
+      - name: Build Windows binary with icon
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          ./build_with_icon.ps1 -AllowGoNetwork -RunGoModTidy
+          Copy-Item README.md bin/README.md -Force
+          Compress-Archive -Path bin/EagleEye.exe,bin/README.md -DestinationPath "${{ matrix.artifact }}" -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/checksums.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
