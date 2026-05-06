@@ -8,15 +8,18 @@ import (
 	"time"
 )
 
+// TestIsAutostartLaunch verifies detection of the platform autostart marker
 func TestIsAutostartLaunch(t *testing.T) {
 	if !IsAutostartLaunch([]string{platform.AutostartArg}) {
 		t.Fatalf("IsAutostartLaunch() = false, want true")
 	}
+
 	if IsAutostartLaunch([]string{"--other"}) {
 		t.Fatalf("IsAutostartLaunch() = true, want false")
 	}
 }
 
+// TestShouldStartTimerOnLaunch locks the autostart resume conditions
 func TestShouldStartTimerOnLaunch(t *testing.T) {
 	settings := preferences.DefaultSettings()
 	settings.RunOnStartup = true
@@ -37,6 +40,7 @@ func TestShouldStartTimerOnLaunch(t *testing.T) {
 	}
 }
 
+// TestAppStateExerciseCycle verifies exercise rotation and empty-cycle fallback
 func TestAppStateExerciseCycle(t *testing.T) {
 	state := newAppState(time.Minute)
 	cycle := []animation.ExerciseType{animation.ExerciseBlink, animation.ExerciseLookOutside}
@@ -44,21 +48,26 @@ func TestAppStateExerciseCycle(t *testing.T) {
 	if got := state.NextExercise(cycle); got != animation.ExerciseBlink {
 		t.Fatalf("first exercise = %v, want blink", got)
 	}
+
 	if got := state.NextExercise(cycle); got != animation.ExerciseLookOutside {
 		t.Fatalf("second exercise = %v, want look outside", got)
 	}
+
 	if got := state.NextExercise(cycle); got != animation.ExerciseBlink {
 		t.Fatalf("third exercise = %v, want cycle restart", got)
 	}
+
 	if got := state.NextExercise(nil); got != animation.ExerciseLeftRight {
 		t.Fatalf("empty cycle exercise = %v, want left/right", got)
 	}
 }
 
+// TestAppStatePauseTimerReplacementAndStop verifies timer cleanup semantics
 func TestAppStatePauseTimerReplacementAndStop(t *testing.T) {
 	state := newAppState(time.Minute)
 	first := time.NewTimer(time.Hour)
 	second := time.NewTimer(time.Hour)
+
 	defer second.Stop()
 
 	state.SetPauseTimer(first)
@@ -67,17 +76,20 @@ func TestAppStatePauseTimerReplacementAndStop(t *testing.T) {
 	if first.Stop() {
 		t.Fatalf("first timer was not stopped when replaced")
 	}
+
 	if got := state.takePauseTimer(); got != second {
 		t.Fatalf("stored timer = %p, want second timer %p", got, second)
 	}
 
 	state.SetPauseTimer(time.NewTimer(time.Hour))
 	state.StopPauseTimer()
+
 	if got := state.takePauseTimer(); got != nil {
 		t.Fatalf("pause timer = %p, want nil after StopPauseTimer", got)
 	}
 }
 
+// TestFormatRemaining verifies countdown formatting and negative clamping
 func TestFormatRemaining(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -98,6 +110,7 @@ func TestFormatRemaining(t *testing.T) {
 	}
 }
 
+// TestOpacityToAlpha verifies opacity clamping and alpha conversion
 func TestOpacityToAlpha(t *testing.T) {
 	tests := []struct {
 		name    string

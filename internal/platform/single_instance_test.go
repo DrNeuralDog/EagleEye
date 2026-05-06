@@ -9,19 +9,23 @@ import (
 	"time"
 )
 
+// TestSingleInstanceActivationRequiresValidMessage verifies only signed pings trigger activation
 func TestSingleInstanceActivationRequiresValidMessage(t *testing.T) {
 	setPlatformUserConfigEnv(t, t.TempDir())
 
 	appName := "EagleEyeIPCTest" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	guard, err := AcquireSingleInstance(appName)
+
 	if err != nil {
 		t.Fatalf("AcquireSingleInstance() error = %v", err)
 	}
+
 	defer func() {
 		_ = guard.Release()
 	}()
 
 	activated := make(chan struct{}, 1)
+
 	guard.ListenForActivation(context.Background(), func() {
 		activated <- struct{}{}
 	})
@@ -29,6 +33,7 @@ func TestSingleInstanceActivationRequiresValidMessage(t *testing.T) {
 	if err := writeRawActivationMessage(guard.Address(), []byte("invalid\n")); err != nil {
 		t.Fatalf("writeRawActivationMessage() error = %v", err)
 	}
+
 	select {
 	case <-activated:
 		t.Fatalf("invalid activation message triggered callback")
@@ -45,14 +50,17 @@ func TestSingleInstanceActivationRequiresValidMessage(t *testing.T) {
 	}
 }
 
+// TestSingleInstanceActivationIsDebounced verifies rapid repeated pings are throttled
 func TestSingleInstanceActivationIsDebounced(t *testing.T) {
 	setPlatformUserConfigEnv(t, t.TempDir())
 
 	appName := "EagleEyeDebounceTest" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	guard, err := AcquireSingleInstance(appName)
+
 	if err != nil {
 		t.Fatalf("AcquireSingleInstance() error = %v", err)
 	}
+
 	defer func() {
 		_ = guard.Release()
 	}()
@@ -65,17 +73,20 @@ func TestSingleInstanceActivationIsDebounced(t *testing.T) {
 	if err := NotifyRunningInstance(appName); err != nil {
 		t.Fatalf("NotifyRunningInstance() first error = %v", err)
 	}
+
 	expectActivation(t, activated)
 
 	time.Sleep(activationDebounce + 50*time.Millisecond)
 	if err := NotifyRunningInstance(appName); err != nil {
 		t.Fatalf("NotifyRunningInstance() second error = %v", err)
 	}
+
 	expectActivation(t, activated)
 
 	if err := NotifyRunningInstance(appName); err != nil {
 		t.Fatalf("NotifyRunningInstance() third error = %v", err)
 	}
+
 	select {
 	case <-activated:
 		t.Fatalf("activation was not debounced")
@@ -83,29 +94,36 @@ func TestSingleInstanceActivationIsDebounced(t *testing.T) {
 	}
 }
 
+// TestSingleInstanceActivationStopsWhenContextCanceled verifies canceling context releases the port
 func TestSingleInstanceActivationStopsWhenContextCanceled(t *testing.T) {
 	setPlatformUserConfigEnv(t, t.TempDir())
 
 	appName := "EagleEyeCancelTest" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	guard, err := AcquireSingleInstance(appName)
+
 	if err != nil {
 		t.Fatalf("AcquireSingleInstance() error = %v", err)
 	}
+
 	defer func() {
 		_ = guard.Release()
 	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	guard.ListenForActivation(ctx, nil)
+
 	cancel()
 
 	deadline := time.After(time.Second)
 	for {
 		replacement, err := AcquireSingleInstance(appName)
+
 		if err == nil {
 			_ = replacement.Release()
+
 			return
 		}
+
 		select {
 		case <-deadline:
 			t.Fatalf("listener did not stop after context cancel")
@@ -114,6 +132,7 @@ func TestSingleInstanceActivationStopsWhenContextCanceled(t *testing.T) {
 	}
 }
 
+// expectActivation waits for the activation callback signal
 func expectActivation(t *testing.T, activated <-chan struct{}) {
 	t.Helper()
 
@@ -124,17 +143,22 @@ func expectActivation(t *testing.T, activated <-chan struct{}) {
 	}
 }
 
+// writeRawActivationMessage sends a custom activation payload to the listener
 func writeRawActivationMessage(address string, message []byte) error {
 	conn, err := net.DialTimeout("tcp", address, 800*time.Millisecond)
+
 	if err != nil {
 		return err
 	}
+
 	defer conn.Close()
 
 	_, err = conn.Write(message)
+
 	return err
 }
 
+// setPlatformUserConfigEnv isolates platform config paths inside the test temp dir
 func setPlatformUserConfigEnv(t *testing.T, path string) {
 	t.Helper()
 

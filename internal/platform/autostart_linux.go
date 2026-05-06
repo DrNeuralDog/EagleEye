@@ -14,6 +14,7 @@ func (service *platformService) EnableAutostart(appName, execPath string) error 
 	if appName == "" {
 		return fmt.Errorf("enable autostart: app name is empty")
 	}
+
 	if execPath == "" {
 		return fmt.Errorf("enable autostart: exec path is empty")
 	}
@@ -27,18 +28,22 @@ func (service *platformService) EnableAutostart(appName, execPath string) error 
 	if err := os.MkdirAll(autostartDir, 0o700); err != nil {
 		return fmt.Errorf("enable autostart: create autostart dir: %w", err)
 	}
+
 	if err := os.Chmod(autostartDir, 0o700); err != nil {
 		return fmt.Errorf("enable autostart: secure autostart dir permissions: %w", err)
 	}
 
 	desktopFilePath := filepath.Join(autostartDir, desktopFileName(appName))
 	content, err := buildDesktopEntry(appName, execPath)
+
 	if err != nil {
 		return fmt.Errorf("enable autostart: build desktop entry: %w", err)
 	}
+
 	if err := os.WriteFile(desktopFilePath, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("enable autostart: write desktop entry: %w", err)
 	}
+
 	if err := os.Chmod(desktopFilePath, 0o600); err != nil {
 		return fmt.Errorf("enable autostart: secure desktop entry permissions: %w", err)
 	}
@@ -70,11 +75,14 @@ func fallbackConfigDir(homeDir string) string {
 
 func desktopFileName(appName string) string {
 	name := strings.TrimSpace(appName)
+
 	if name == "" {
 		name = "eagleeye"
 	}
+
 	name = strings.ToLower(name)
 	name = strings.ReplaceAll(name, " ", "-")
+
 	return name + ".desktop"
 }
 
@@ -82,17 +90,18 @@ func buildDesktopEntry(appName, execPath string) (string, error) {
 	if err := validateDesktopEntryValue("app name", appName); err != nil {
 		return "", err
 	}
+
 	if err := validateDesktopEntryValue("exec path", execPath); err != nil {
 		return "", err
 	}
 
 	return fmt.Sprintf(
 		`[Desktop Entry]
-Type=Application
-Name=%s
-Exec=%s
-X-GNOME-Autostart-enabled=true
-Terminal=false
+		  Type=Application
+		  Name=%s
+		  Exec=%s
+		  X-GNOME-Autostart-enabled=true
+		  Terminal=false
 `,
 		escapeDesktopString(appName),
 		buildDesktopExec(execPath),
@@ -107,11 +116,13 @@ func validateDesktopEntryValue(field string, value string) error {
 	if strings.TrimSpace(value) == "" {
 		return fmt.Errorf("%s is empty", field)
 	}
+
 	for _, char := range value {
 		if unicode.IsControl(char) {
 			return fmt.Errorf("%s contains control character", field)
 		}
 	}
+
 	return nil
 }
 
@@ -123,6 +134,7 @@ func quoteDesktopExecArg(value string) string {
 	if !strings.ContainsAny(value, " \t\"\\$`%") {
 		return value
 	}
+
 	replacer := strings.NewReplacer(
 		`\`, `\\`,
 		`"`, `\"`,
@@ -130,5 +142,6 @@ func quoteDesktopExecArg(value string) string {
 		"`", "\\`",
 		`%`, `%%`,
 	)
+
 	return `"` + replacer.Replace(value) + `"`
 }

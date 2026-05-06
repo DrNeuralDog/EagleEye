@@ -25,15 +25,18 @@ func NewService() Service {
 // GetConfigDir returns the OS-standard configuration directory.
 func (service *platformService) GetConfigDir() (string, error) {
 	configDir, err := os.UserConfigDir()
+
 	if err == nil && configDir != "" {
 		return configDir, nil
 	}
 
 	homeDir, homeErr := os.UserHomeDir()
+
 	if homeErr != nil {
 		if err != nil {
 			return "", fmt.Errorf("get config dir: %w", err)
 		}
+
 		return "", fmt.Errorf("get config dir: %w", homeErr)
 	}
 

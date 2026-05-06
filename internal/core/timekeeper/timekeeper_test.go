@@ -21,7 +21,9 @@ func TestForceNextBreakStartsShortBreakWhenShortIsNext(t *testing.T) {
 			},
 		},
 	})
+
 	keeper.Start()
+
 	defer keeper.Stop()
 
 	keeper.ForceNextBreak()
@@ -112,6 +114,7 @@ func TestStartAfterStopRestartsLoop(t *testing.T) {
 	if state := currentState(keeper); state != StateShortBreak {
 		t.Fatalf("state = %s, want %s after restart", state, StateShortBreak)
 	}
+
 	assertChannelClosed(t, events)
 }
 
@@ -138,6 +141,7 @@ func TestNilIdleCheckerIsNoOp(t *testing.T) {
 		IdleResetAfter:    time.Nanosecond,
 		IdleCheckInterval: time.Nanosecond,
 	})
+
 	keeper.SetIdleChecker(nil)
 
 	keeper.mu.Lock()
@@ -149,6 +153,7 @@ func TestNilIdleCheckerIsNoOp(t *testing.T) {
 	if !idleResetEnabled {
 		t.Fatalf("nil idle checker disabled config; want no-op")
 	}
+
 	if state != StateWork {
 		t.Fatalf("state = %s, want %s", state, StateWork)
 	}
@@ -161,6 +166,7 @@ func newTestKeeper(config model.TimeKeeperConfig) *TimeKeeper {
 func currentState(keeper *TimeKeeper) State {
 	keeper.mu.Lock()
 	defer keeper.mu.Unlock()
+
 	return keeper.state
 }
 
@@ -168,6 +174,7 @@ func assertChannelClosed(t *testing.T, events <-chan Event) {
 	t.Helper()
 
 	timeout := time.After(time.Second)
+
 	for {
 		select {
 		case _, ok := <-events:

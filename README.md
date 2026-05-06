@@ -181,7 +181,7 @@ The simplest path is to grab a prebuilt binary from the Releases page. No Go, no
 | --- | --- | --- |
 | **Windows x64** | `EagleEye_windows_amd64.zip` | Extract it and run `EagleEye.exe`. On first launch Windows SmartScreen may throw a "Windows protected your PC" warning - click **More info → Run anyway** (the app isn't code-signed, which is normal for open source). |
 | **Linux x64** | `EagleEye_linux_amd64.tar.gz` | `tar -xzf EagleEye_linux_amd64.tar.gz && ./eagleeye`. You'll need the OpenGL system libraries: `sudo apt install libgl1 libxxf86vm1` (Debian/Ubuntu). |
-| **macOS Apple Silicon (M1/M2/M3)** | `EagleEye_darwin_arm64.tar.gz` | `tar -xzf EagleEye_darwin_arm64.tar.gz && ./EagleEye`. If Gatekeeper complains, right-click the binary → **Open** → confirm. Intel Macs can run this build transparently via Rosetta 2. |
+| **macOS Apple Silicon (M1/M2/M3)** | `EagleEye_darwin_arm64.tar.gz` | `tar -xzf EagleEye_darwin_arm64.tar.gz && ./EagleEye`. If Gatekeeper complains, right-click the binary → **Open** → confirm. |
 
 The `checksums.txt` file in the same release contains a SHA-256 for each archive - verify integrity with `sha256sum -c checksums.txt` (Linux/macOS) or `Get-FileHash` (Windows PowerShell).
 
@@ -281,6 +281,10 @@ EagleEye started out as a simple eye-care utility, but the bigger picture is to 
 - **Behavior tracking:** how many stretches you actually completed today versus skipped, stats by day and week, long-term trends.
 - **Social integrations:** share progress with friends and coworkers - less eye strain, more completed stretches, a steadier workday.
 - **Data export:** dump local stats to CSV/JSON for people who want to analyze themselves by hand or plug into other health trackers.
+
+## License
+
+EagleEye is released under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Get in touch 📫
 

@@ -107,10 +107,12 @@ func TestRightPanelLayoutKeepsDirectionalSpritesAtDefaultSize(t *testing.T) {
 	leftImage := newFixedCanvasObject(fyne.NewSize(0, 0))
 	leftSkip := newFixedCanvasObject(fyne.NewSize(50, 30))
 	leftLayout := &rightPanelLayout{}
+
 	leftLayout.SetSpriteTransform(spriteTransformForResource(fyne.NewStaticResource("sprites/Falcon looks left.png", nil)))
 	leftLayout.Layout([]fyne.CanvasObject{leftImage, leftSkip}, panelSize)
 
 	assertSizeEquals(t, leftImage.Size(), defaultImage.Size())
+
 	if leftImage.Position() != defaultImage.Position() {
 		t.Fatalf("unexpected sprite position: got=%v want=%v", leftImage.Position(), defaultImage.Position())
 	}
@@ -163,6 +165,7 @@ func (object *fixedCanvasObject) Refresh() {}
 
 func assertSizeEquals(t *testing.T, got, want fyne.Size) {
 	t.Helper()
+
 	if got != want {
 		t.Fatalf("unexpected size: got=%v want=%v", got, want)
 	}

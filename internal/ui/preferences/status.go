@@ -22,7 +22,7 @@ const (
 
 const (
 	statusBarMainTextSize  = float32(11)
-	statusTimerTextSize    = float32(12) // slightly larger than main status line
+	statusTimerTextSize    = float32(12) //Slightly larger than main status line
 	statusIndicatorSize    = float32(18)
 	statusBarFromFooterGap = float32(2) // space between timer button and divider line
 )
@@ -46,22 +46,26 @@ func newStatusBar() (fyne.CanvasObject, *canvas.Circle, *canvas.Text, *canvas.Te
 	statusTextLine := container.NewHBox(statusBarMain, statusBarTimer)
 	statusTextArea := container.NewStack(statusTextLine)
 	indicatorCell := container.NewVBox(layout.NewSpacer(), statusIndicatorWrap, layout.NewSpacer())
-	// Center = full-width text (leading); right = indicator pinned to window/content right edge.
+
+	// Center - текст во всю ширину (ведущий-основной); Right = индикатор, прикрепленный к правому краю окна
 	statusRow := container.NewBorder(nil, nil, nil, indicatorCell, statusTextArea)
 	statusDivider := canvas.NewRectangle(statusBarDividerClr)
 	statusDivider.SetMinSize(fyne.NewSize(1, 1))
 	statusBar := container.NewBorder(statusDivider, nil, nil, nil, container.NewPadded(statusRow))
+
 	return statusBar, statusDot, statusBarMain, statusBarTimer
 }
 
-// SetServiceNotStarted shows non-running service status.
+// SetServiceNotStarted shows non-running service status
 func (prefs *Window) SetServiceNotStarted() {
 	fyne.Do(func() {
 		prefs.currentServiceState = serviceStateNotStarted
 		prefs.runningTimerText = ""
+
 		prefs.timerToggleButton.Enable()
 		prefs.timerToggleButton.Importance = widget.SuccessImportance
 		prefs.timerToggleButton.Refresh()
+
 		prefs.renderServiceStatus()
 	})
 }
@@ -71,32 +75,38 @@ func (prefs *Window) SetServiceRunning(remaining time.Duration) {
 	fyne.Do(func() {
 		prefs.currentServiceState = serviceStateRunning
 		prefs.runningTimerText = formatDuration(remaining)
+
 		prefs.timerToggleButton.Enable()
 		prefs.timerToggleButton.Importance = widget.MediumImportance
 		prefs.timerToggleButton.Refresh()
+
 		prefs.renderServiceStatus()
 	})
 }
 
-// SetServicePaused shows paused service status.
+// SetServicePaused shows paused service status
 func (prefs *Window) SetServicePaused() {
 	fyne.Do(func() {
 		prefs.currentServiceState = serviceStatePaused
 		prefs.runningTimerText = ""
+
 		prefs.timerToggleButton.Enable()
 		prefs.timerToggleButton.Importance = widget.MediumImportance
 		prefs.timerToggleButton.Refresh()
+
 		prefs.renderServiceStatus()
 	})
 }
 
-// SetTimerControlState updates the bottom button label.
+// SetTimerControlState updates the bottom button label
 func (prefs *Window) SetTimerControlState(isRunning bool) {
 	fyne.Do(func() {
 		if prefs.currentServiceState == serviceStateNotStarted {
 			prefs.timerToggleButton.SetText(prefs.uiLocalizer.T("prefs.start"))
+
 			return
 		}
+
 		if isRunning {
 			prefs.timerToggleButton.SetText(prefs.uiLocalizer.T("prefs.pauseBreakTimer"))
 		} else {
@@ -142,8 +152,10 @@ func formatDuration(value time.Duration) string {
 	if value < 0 {
 		value = 0
 	}
+
 	seconds := int(value.Seconds())
 	minutes := seconds / 60
 	seconds = seconds % 60
+
 	return fmt.Sprintf("%02d:%02d", minutes, seconds)
 }

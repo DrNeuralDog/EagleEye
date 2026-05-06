@@ -36,7 +36,9 @@ type AppController struct {
 	activeIcon fyne.Resource
 	pausedIcon fyne.Resource
 
-	exerciseSpec  animation.ExerciseSpec
-	idleSpec      animation.IdleSpec
+	exerciseSpec animation.ExerciseSpec
+
+	idleSpec animation.IdleSpec
+
 	exerciseCycle []animation.ExerciseType
 }

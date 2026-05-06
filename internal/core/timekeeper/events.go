@@ -2,7 +2,7 @@ package timekeeper
 
 import "time"
 
-// State represents the current TimeKeeper mode.
+// State represents the current TimeKeeper mode
 type State string
 
 const (
@@ -12,7 +12,7 @@ const (
 	StatePaused     State = "paused"
 )
 
-// EventType defines the type of TimeKeeper event.
+// EventType defines the type of TimeKeeper event
 type EventType string
 
 const (
@@ -22,7 +22,7 @@ const (
 	EventIdleError   EventType = "idle_error"
 )
 
-// Event represents a TimeKeeper update for observers.
+// Event represents a TimeKeeper update for observers
 type Event struct {
 	Type       EventType
 	State      State

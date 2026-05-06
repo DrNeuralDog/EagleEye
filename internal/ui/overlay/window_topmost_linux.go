@@ -35,6 +35,7 @@ func (overlay *Window) applyNativeTopmost(enable bool) {
 		}
 
 		action := "remove,above"
+
 		if enable {
 			action = "add,above"
 		}
@@ -47,14 +48,18 @@ func (overlay *Window) applyNativeTopmost(enable bool) {
 func lookupWmctrl() (string, bool) {
 	wmctrlLookupOnce.Do(func() {
 		path, ok := platform.FindSystemExecutable("wmctrl")
+
 		if !ok {
 			return
 		}
+
 		wmctrlPath = path
 	})
+
 	if wmctrlPath == "" {
 		return "", false
 	}
+
 	return wmctrlPath, true
 }
 

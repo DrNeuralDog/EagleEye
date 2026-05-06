@@ -123,10 +123,12 @@ type Localizer struct {
 	language string
 }
 
+// New creates a localizer with a normalized starting language
 func New(language string) *Localizer {
 	return &Localizer{language: NormalizeLanguage(language)}
 }
 
+// NormalizeLanguage maps user input to a supported language code
 func NormalizeLanguage(language string) string {
 	switch strings.ToLower(strings.TrimSpace(language)) {
 	case LanguageRU:
@@ -136,18 +138,23 @@ func NormalizeLanguage(language string) string {
 	}
 }
 
+// SetLanguage updates the active language safely
 func (localizer *Localizer) SetLanguage(language string) {
 	localizer.mu.Lock()
 	defer localizer.mu.Unlock()
+
 	localizer.language = NormalizeLanguage(language)
 }
 
+// Language returns the active language code
 func (localizer *Localizer) Language() string {
 	localizer.mu.RLock()
 	defer localizer.mu.RUnlock()
+
 	return localizer.language
 }
 
+// T resolves a translation key and formats optional arguments
 func (localizer *Localizer) T(key string, args ...any) string {
 	localizer.mu.RLock()
 	language := localizer.language
@@ -157,27 +164,34 @@ func (localizer *Localizer) T(key string, args ...any) string {
 	if !ok {
 		bundle = translations[LanguageEN]
 	}
+
 	value, ok := bundle[key]
 	if !ok {
 		value = translations[LanguageEN][key]
 	}
+
 	if len(args) == 0 {
 		return value
 	}
+
 	return fmt.Sprintf(value, args...)
 }
 
+// LanguageOptions returns display labels for the preferences selector
 func LanguageOptions() []string {
 	return []string{"English", "Русский"}
 }
 
+// LanguageDisplayName returns the selector label for a language code
 func LanguageDisplayName(language string) string {
 	if NormalizeLanguage(language) == LanguageRU {
 		return "Русский"
 	}
+
 	return "English"
 }
 
+// LanguageFromDisplayName converts a selector label into a language code
 func LanguageFromDisplayName(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "russian", "русский":
